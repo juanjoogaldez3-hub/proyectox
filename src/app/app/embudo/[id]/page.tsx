@@ -81,6 +81,9 @@ export default async function PaginaOportunidad({
               empresa.nombre
             } sobre ${oportunidad.titulo}.`}
             className="px-3 py-2 text-sm"
+            contactoId={oportunidad.contacto.id}
+            oportunidadId={oportunidad.id}
+            resumen={`Le escribiste por WhatsApp sobre "${oportunidad.titulo}"`}
           />
           <BotonEnlace
             href={`/app/cotizaciones/nueva?contacto=${oportunidad.contacto.id}&oportunidad=${oportunidad.id}`}

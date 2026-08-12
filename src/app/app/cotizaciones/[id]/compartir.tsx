@@ -6,6 +6,7 @@ import { Boton, Tarjeta } from "@/components/ui";
 import { Icono } from "@/components/iconos";
 import { enlaceWhatsApp } from "@/lib/gt";
 import { compartirCotizacion, revocarEnlace } from "../acciones";
+import { registrarMensajeWhatsApp } from "@/app/app/acciones-whatsapp";
 
 function BotonGenerar() {
   const { pending } = useFormStatus();
@@ -44,6 +45,7 @@ export function PanelCompartir({
   nombreCliente,
   nombreEmpresa,
   vistaEl,
+  contactoId,
 }: {
   id: string;
   token: string | null;
@@ -53,6 +55,7 @@ export function PanelCompartir({
   nombreCliente: string;
   nombreEmpresa: string;
   vistaEl: string | null;
+  contactoId: string;
 }) {
   // El origen se toma del navegador: así el enlace sirve igual en localhost,
   // en el dominio propio o detrás de un proxy, sin depender de configuración.
@@ -115,6 +118,13 @@ export function PanelCompartir({
             href={whatsapp}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => {
+              void registrarMensajeWhatsApp(
+                contactoId,
+                null,
+                `Le mandaste el enlace de la cotización #${numero} por WhatsApp`,
+              );
+            }}
             className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
           >
             <Icono nombre="whatsapp" />

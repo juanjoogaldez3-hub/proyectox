@@ -163,6 +163,8 @@ export default async function PaginaContactos({
                       <BotonWhatsApp
                         numero={c.whatsapp}
                         mensaje={`Hola ${c.nombre.split(" ")[0]}, le escribo de ${empresa.nombre}.`}
+                        contactoId={c.id}
+                        resumen="Le escribiste por WhatsApp desde la lista"
                       />
                     </td>
                   </tr>

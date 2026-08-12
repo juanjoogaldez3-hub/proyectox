@@ -79,6 +79,9 @@ export default async function PaginaCotizacion({
               mensaje={mensajeWhatsApp}
               texto="Enviar el detalle"
               className="px-3 py-2 text-sm"
+              contactoId={cotizacion.contactoId}
+              oportunidadId={cotizacion.oportunidadId}
+              resumen={`Le mandaste la cotización #${cotizacion.numero} por WhatsApp`}
             />
             <BotonImprimir />
             {cotizacion.estado !== "ACEPTADA" && (
@@ -119,6 +122,7 @@ export default async function PaginaCotizacion({
             nombreCliente={cotizacion.contacto.nombre}
             nombreEmpresa={empresa.nombre}
             vistaEl={cotizacion.vistaEl ? fechaHora(cotizacion.vistaEl) : null}
+            contactoId={cotizacion.contactoId}
           />
         </div>
       </div>

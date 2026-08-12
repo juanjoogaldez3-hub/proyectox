@@ -101,7 +101,13 @@ export default async function PaginaContacto({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <BotonWhatsApp numero={contacto.whatsapp} mensaje={saludo} className="px-3 py-2 text-sm" />
+          <BotonWhatsApp
+            numero={contacto.whatsapp}
+            mensaje={saludo}
+            className="px-3 py-2 text-sm"
+            contactoId={contacto.id}
+            resumen="Le escribiste por WhatsApp desde su ficha"
+          />
           <BotonEnlace
             href={`/app/cotizaciones/nueva?contacto=${contacto.id}`}
             variante="secundario"
