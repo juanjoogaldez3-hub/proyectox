@@ -46,6 +46,21 @@ export function AccionesEstado({
     );
   }
 
+  // Una cotización aceptada por el cliente desde el enlace público todavía no
+  // tiene venta: hay que poder registrarla desde acá.
+  if (estado === "ACEPTADA") {
+    return (
+      <Tarjeta className="flex flex-wrap items-center gap-2 p-3">
+        <span className="mr-1 text-sm text-tinta-500">
+          Aceptada. Registrá la venta para descontar inventario:
+        </span>
+        <form action={convertirEnVenta.bind(null, id)}>
+          <BotonAccion variante="primario">Registrar la venta</BotonAccion>
+        </form>
+      </Tarjeta>
+    );
+  }
+
   return (
     <Tarjeta className="flex flex-wrap items-center gap-2 p-3">
       <span className="mr-1 text-sm text-tinta-500">Marcar como:</span>

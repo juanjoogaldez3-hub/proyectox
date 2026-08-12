@@ -58,9 +58,14 @@ export default async function PaginaContactos({
         titulo="Contactos"
         descripcion={`${total} contacto${total === 1 ? "" : "s"} en tu cuenta`}
         acciones={
-          <BotonEnlace href="/app/contactos/nuevo">
-            <Icono nombre="mas" /> Nuevo contacto
-          </BotonEnlace>
+          <>
+            <BotonEnlace href="/app/contactos/importar" variante="secundario">
+              Importar
+            </BotonEnlace>
+            <BotonEnlace href="/app/contactos/nuevo">
+              <Icono nombre="mas" /> Nuevo contacto
+            </BotonEnlace>
+          </>
         }
       />
 
@@ -102,7 +107,14 @@ export default async function PaginaContactos({
               : "Agregá a los clientes que ya te compran y a los que te escriben por WhatsApp."
           }
           accion={
-            !busqueda && <BotonEnlace href="/app/contactos/nuevo">Agregar el primero</BotonEnlace>
+            !busqueda && (
+              <div className="flex flex-wrap justify-center gap-2">
+                <BotonEnlace href="/app/contactos/nuevo">Agregar el primero</BotonEnlace>
+                <BotonEnlace href="/app/contactos/importar" variante="secundario">
+                  Importar desde Excel
+                </BotonEnlace>
+              </div>
+            )
           }
         />
       ) : (

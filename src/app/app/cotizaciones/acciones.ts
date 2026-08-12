@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -215,6 +216,47 @@ export async function cambiarEstadoCotizacion(
     },
   });
   revalidatePath("/app/cotizaciones");
+  revalidatePath(`/app/cotizaciones/${id}`);
+}
+
+/**
+ * Genera (o reusa) el enlace publico que se le manda al cliente. El token es
+ * aleatorio de 256 bits: no se puede adivinar y no revela nada de la cuenta.
+ * Compartir tambien marca la cotizacion como enviada, que es lo que acaba de
+ * pasar de verdad.
+ */
+export async function compartirCotizacion(id: string): Promise<void> {
+  const { empresa } = await requerirSesion();
+
+  const cotizacion = await prisma.cotizacion.findFirst({
+    where: { id, empresaId: empresa.id },
+    select: { id: true, tokenPublico: true, estado: true },
+  });
+  if (!cotizacion) return;
+
+  if (!cotizacion.tokenPublico) {
+    await prisma.cotizacion.update({
+      where: { id: cotizacion.id },
+      data: {
+        tokenPublico: randomBytes(32).toString("base64url"),
+        ...(cotizacion.estado === "BORRADOR" && {
+          estado: "ENVIADA",
+          enviadaEl: new Date(),
+        }),
+      },
+    });
+  }
+
+  revalidatePath(`/app/cotizaciones/${id}`);
+}
+
+/** Corta el acceso: el enlace que ya circulaba deja de funcionar. */
+export async function revocarEnlace(id: string): Promise<void> {
+  const { empresa } = await requerirSesion();
+  await prisma.cotizacion.updateMany({
+    where: { id, empresaId: empresa.id },
+    data: { tokenPublico: null },
+  });
   revalidatePath(`/app/cotizaciones/${id}`);
 }
 

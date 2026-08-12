@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { OrigenContacto } from "@prisma/client";
+import { OrigenContacto, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requerirSesion } from "@/lib/auth";
 import { verificarLimite } from "@/lib/limites";
+import { ILIMITADO, PLANES } from "@/lib/planes";
 import { comoError, textoOpcional, type EstadoAccion } from "@/lib/acciones";
 import { normalizarNit, normalizarTelefono } from "@/lib/gt";
 
@@ -128,6 +129,130 @@ export async function eliminarContacto(id: string): Promise<void> {
   await prisma.contacto.deleteMany({ where: { id, empresaId: empresa.id } });
   revalidatePath("/app/contactos");
   redirect("/app/contactos");
+}
+
+// --- Importación desde archivo ----------------------------------------------
+
+const esquemaImportado = z.object({
+  nombre: z.string().trim().min(1),
+  negocio: z.string().trim().optional(),
+  telefono: z.string().trim().optional(),
+  whatsapp: z.string().trim().optional(),
+  email: z.string().trim().optional(),
+  nit: z.string().trim().optional(),
+  direccion: z.string().trim().optional(),
+  departamento: z.string().trim().optional(),
+  municipio: z.string().trim().optional(),
+  etiquetas: z.string().trim().optional(),
+  notas: z.string().trim().optional(),
+});
+
+export type ResultadoImportacion = {
+  importados: number;
+  repetidos: number;
+  sinNombre: number;
+  cortadoPorPlan: boolean;
+};
+
+/**
+ * Carga masiva de contactos. Dos decisiones que importan:
+ *
+ * - Un contacto se considera repetido si coincide el WhatsApp, el teléfono o
+ *   el NIT con alguno ya guardado. Se salta y se cuenta, no se sobrescribe:
+ *   los datos que ya tenía el usuario valen más que los del archivo.
+ * - Si el archivo excede el tope del plan, se importa hasta donde alcanza y se
+ *   avisa, en vez de fallar y dejar todo a medias.
+ */
+export async function importarContactos(
+  filas: unknown,
+): Promise<ResultadoImportacion & { error?: string }> {
+  const vacio = { importados: 0, repetidos: 0, sinNombre: 0, cortadoPorPlan: false };
+  try {
+    const { empresa, plan, usuario } = await requerirSesion();
+    const entrada = z.array(esquemaImportado.partial({ nombre: true })).parse(filas);
+
+    const limite = PLANES[plan].limites.contactos;
+    const yaTiene = await prisma.contacto.count({ where: { empresaId: empresa.id } });
+    let disponibles = limite === ILIMITADO ? Number.POSITIVE_INFINITY : limite - yaTiene;
+
+    // Un solo viaje a la base para saber qué ya existe.
+    const existentes = await prisma.contacto.findMany({
+      where: { empresaId: empresa.id },
+      select: { telefono: true, whatsapp: true, nit: true },
+    });
+    const claves = new Set<string>();
+    for (const c of existentes) {
+      if (c.telefono) claves.add(`t:${c.telefono}`);
+      if (c.whatsapp) claves.add(`t:${c.whatsapp}`);
+      if (c.nit) claves.add(`n:${c.nit}`);
+    }
+
+    const aCrear: Prisma.ContactoCreateManyInput[] = [];
+    let repetidos = 0;
+    let sinNombre = 0;
+    let cortadoPorPlan = false;
+
+    for (const fila of entrada) {
+      const nombre = (fila.nombre ?? "").trim();
+      if (nombre.length < 2) {
+        sinNombre++;
+        continue;
+      }
+
+      const telefono = normalizarTelefono(fila.telefono);
+      const whatsapp = normalizarTelefono(fila.whatsapp) ?? telefono;
+      const nit = normalizarNit(fila.nit);
+
+      const propias = [
+        telefono && `t:${telefono}`,
+        whatsapp && `t:${whatsapp}`,
+        nit && nit !== "CF" && `n:${nit}`,
+      ].filter(Boolean) as string[];
+
+      if (propias.some((k) => claves.has(k))) {
+        repetidos++;
+        continue;
+      }
+      if (disponibles <= 0) {
+        cortadoPorPlan = true;
+        break;
+      }
+
+      propias.forEach((k) => claves.add(k));
+      disponibles--;
+
+      const correo = (fila.email ?? "").trim().toLowerCase();
+      aCrear.push({
+        empresaId: empresa.id,
+        nombre,
+        negocio: fila.negocio?.trim() || null,
+        email: z.string().email().safeParse(correo).success ? correo : null,
+        telefono,
+        whatsapp,
+        nit,
+        direccion: fila.direccion?.trim() || null,
+        departamento: fila.departamento?.trim() || null,
+        municipio: fila.municipio?.trim() || null,
+        origen: "OTRO",
+        etiquetas: (fila.etiquetas ?? "")
+          .split(/[,;]/)
+          .map((e) => e.trim())
+          .filter(Boolean),
+        notas: fila.notas?.trim() || null,
+        responsableId: usuario.id,
+      });
+    }
+
+    if (aCrear.length > 0) {
+      await prisma.contacto.createMany({ data: aCrear });
+    }
+
+    revalidatePath("/app/contactos");
+    return { importados: aCrear.length, repetidos, sinNombre, cortadoPorPlan };
+  } catch (e) {
+    const problema = comoError(e);
+    return { ...vacio, error: problema?.error ?? "No se pudo importar el archivo." };
+  }
 }
 
 // --- Notas y actividades rápidas desde la ficha del contacto -----------------

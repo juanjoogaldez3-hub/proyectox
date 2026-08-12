@@ -21,8 +21,25 @@ inventario. Multi-tenant desde el primer día para venderse por suscripción.
 - Cotizaciones con líneas de producto, descuento, IVA calculado y totales en vivo.
 - Documento imprimible (el navegador lo guarda como PDF) con los datos fiscales
   del negocio y del cliente.
+- **Enlace público para el cliente**: se genera un enlace con token que el
+  cliente abre desde su celular, sin cuenta ni instalación, y acepta o rechaza
+  de un clic. El vendedor ve cuándo lo abrió y quién lo aceptó. El enlace se
+  puede revocar.
 - Estados: borrador, enviada, aceptada, rechazada, vencida. Al aceptarla se crea
   la venta y, si venía de una oportunidad, se marca como ganada.
+
+**Reportes**
+- Ventas por mes, ranking por vendedor y por producto, embudo abierto por etapa.
+- Tarjetas de resumen: vendido, ticket promedio, pendiente de cobro, tasa de
+  aceptación de cotizaciones y tasa de cierre de oportunidades.
+- Gráficas en HTML y CSS, sin librerías, con tabla equivalente en cada una.
+
+**Importar contactos**
+- Carga desde CSV con vista previa y emparejado de columnas. Reconoce solo el
+  separador (coma o punto y coma, que es lo que exporta Excel en español), el
+  BOM, los saltos de Windows y los campos entre comillas.
+- Los contactos repetidos (mismo teléfono o NIT) se saltan y se reportan, sin
+  pisar lo que ya estaba guardado.
 
 **Inventario y ventas**
 - Productos con precio, costo, margen, unidad, SKU y stock mínimo.
@@ -36,9 +53,12 @@ inventario. Multi-tenant desde el primer día para venderse por suscripción.
 - Roles: propietario, administrador y vendedor.
 - Planes Gratis / Emprendedor / Negocio con límites por recurso, verificados antes
   de crear cada registro.
-- 14 días de prueba del plan Emprendedor. Al vencer, la cuenta baja a los límites
-  del plan Gratis sin perder información.
+- 14 días de prueba del plan Emprendedor. Al vencer —igual que al vencerse un
+  periodo pagado— la cuenta baja sola a los límites del plan Gratis sin perder
+  información, y avisa cinco días antes.
 - Registro de pagos por depósito o transferencia, que es como paga la mayoría acá.
+- Recuperación de contraseña por correo, con enlace de un solo uso que vence en
+  una hora.
 
 ## Detalles de Guatemala
 
@@ -82,7 +102,11 @@ base con información real.
 | --- | --- |
 | `DATABASE_URL` | Conexión a PostgreSQL. |
 | `AUTH_SECRET` | Llave para firmar la sesión. Generala con `openssl rand -base64 32`. |
-| `NEXT_PUBLIC_APP_URL` | URL pública de la app. |
+| `NEXT_PUBLIC_APP_URL` | URL pública de la app, como respaldo para armar enlaces. |
+| `SMTP_*` | Correo saliente para recuperar contraseñas. Si lo dejás vacío, el enlace se escribe en el log del servidor en vez de enviarse. |
+
+El servidor puede correr en cualquier zona horaria: los cortes de día y de mes
+se calculan siempre en hora de Guatemala (UTC-6, sin horario de verano).
 
 ## Scripts
 
@@ -134,10 +158,10 @@ Esto es un MVP funcional; para cobrarle a clientes reales conviene sumar:
 
 - **HTTPS obligatorio.** La cookie de sesión se marca `secure` en producción, así
   que la app necesita servirse por HTTPS.
-- **Cobro automático.** Hoy el pago se registra a mano tras un depósito o
-  transferencia; falta conectar una pasarela y vencer las cuentas por sí solas.
-- **Recuperación de contraseña por correo.** Hoy la cambia el propio usuario
-  desde su cuenta o se la reasigna un administrador.
+- **Cobro automático.** El vencimiento sí es automático, pero el pago se
+  registra a mano tras un depósito o transferencia; falta conectar una pasarela.
+- **Un proveedor de correo conectado.** Sin `SMTP_*` configurado, los enlaces de
+  recuperación quedan en el log del servidor en vez de llegarle al usuario.
 - **Respaldos de la base** y un plan de restauración.
 - **Facturación electrónica (FEL).** El comprobante de venta es interno; no
   sustituye a la factura autorizada por la SAT.
