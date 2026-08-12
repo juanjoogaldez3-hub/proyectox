@@ -22,10 +22,25 @@ export const metadata: Metadata = {
     locale: "es_GT",
     type: "website",
   },
+  applicationName: "CRM Chapín",
+  appleWebApp: {
+    capable: true,
+    title: "CRM Chapín",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/iconos/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
   themeColor: "#1f47e0",
+  // Al instalarse queda a pantalla completa; esto evita el zoom accidental
+  // al tocar dos veces, pero sin bloquear el zoom manual de quien lo necesita.
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

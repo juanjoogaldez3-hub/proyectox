@@ -94,11 +94,14 @@ export function DocumentoCotizacion({
       <div className="overflow-x-auto py-5">
         <table className="w-full text-sm">
           <thead className="border-b border-tinta-300 text-left text-xs uppercase tracking-wide text-tinta-500">
-            <tr>
+            {/* Encabezados cortos a propósito: en un celular, "P. unitario" se
+                partía en dos renglones y, forzándolo a uno solo, empujaba la
+                columna del total fuera de la hoja. */}
+            <tr className="whitespace-nowrap">
               <th className="pb-2 font-medium">Descripción</th>
-              <th className="pb-2 text-right font-medium">Cant.</th>
-              <th className="pb-2 text-right font-medium">P. unitario</th>
-              <th className="pb-2 text-right font-medium">Total</th>
+              <th className="pb-2 pl-3 text-right font-medium">Cant.</th>
+              <th className="pb-2 pl-3 text-right font-medium">Precio</th>
+              <th className="pb-2 pl-3 text-right font-medium">Total</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-tinta-100">

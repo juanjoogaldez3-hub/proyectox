@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requerirSesion } from "@/lib/auth";
 import { NavegacionLateral, NavegacionMovil } from "@/components/navegacion";
 import { Icono } from "@/components/iconos";
+import { Instalar } from "@/components/instalar";
 import { PLANES, diasRestantesDePrueba, diasRestantesHasta } from "@/lib/planes";
 import { salir } from "../(auth)/acciones";
 
@@ -25,6 +26,7 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
       <NavegacionLateral />
 
       <div className="flex min-w-0 flex-1 flex-col">
+        <Instalar />
         <header className="no-imprimir relative flex items-center justify-between gap-3 border-b border-tinta-200 bg-white px-4 py-2.5">
           <div className="flex items-center gap-3">
             <NavegacionMovil />
