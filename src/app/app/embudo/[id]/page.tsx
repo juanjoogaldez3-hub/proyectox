@@ -94,9 +94,9 @@ export default async function PaginaOportunidad({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Tarjeta className="p-5 lg:col-span-2">
-          <dl className="grid gap-4 sm:grid-cols-3">
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <dt className="text-xs uppercase tracking-wide text-tinta-500">Monto</dt>
               <dd className="mt-0.5 text-lg font-semibold text-tinta-900">

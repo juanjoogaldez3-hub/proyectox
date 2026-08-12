@@ -66,7 +66,7 @@ export function FormularioContacto({
 
       <Tarjeta className="p-5">
         <h2 className="mb-4 text-sm font-semibold text-tinta-900">Datos del contacto</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Campo etiqueta="Nombre *">
             <input
               name="nombre"
@@ -126,7 +126,7 @@ export function FormularioContacto({
 
       <Tarjeta className="p-5">
         <h2 className="mb-4 text-sm font-semibold text-tinta-900">Ubicación y seguimiento</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Campo etiqueta="Departamento">
             <select
               name="departamento"

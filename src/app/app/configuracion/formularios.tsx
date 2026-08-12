@@ -44,7 +44,7 @@ export function FormularioEmpresa({
           {estado?.ok && <Aviso tono="exito">Datos guardados.</Aviso>}
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Campo etiqueta="Nombre del negocio *" className="sm:col-span-2">
             <input name="nombre" required defaultValue={valores.nombre} className="campo" />
           </Campo>

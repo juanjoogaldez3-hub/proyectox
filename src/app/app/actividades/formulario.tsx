@@ -44,7 +44,7 @@ export function FormularioActividad({
       {estado?.error && <Aviso tono="peligro">{estado.error}</Aviso>}
 
       <Tarjeta className="p-5">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Campo etiqueta="¿Qué hay que hacer? *" className="sm:col-span-2">
             <input
               name="titulo"

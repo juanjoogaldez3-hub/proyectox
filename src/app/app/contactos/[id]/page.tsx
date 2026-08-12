@@ -114,7 +114,7 @@ export default async function PaginaContacto({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <Tarjeta className="p-5">
             <h2 className="mb-3 text-sm font-semibold text-tinta-900">Oportunidades</h2>

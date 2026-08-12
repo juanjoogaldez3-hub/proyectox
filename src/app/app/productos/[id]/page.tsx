@@ -80,9 +80,9 @@ export default async function PaginaProducto({
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Tarjeta className="p-5 lg:col-span-2">
-          <dl className="grid gap-4 sm:grid-cols-4">
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-4">
             <div>
               <dt className="text-xs uppercase tracking-wide text-tinta-500">Precio</dt>
               <dd className="mt-0.5 text-lg font-semibold text-tinta-900">

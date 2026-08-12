@@ -45,12 +45,16 @@ export function Tablero({ columnas }: { columnas: ColumnaEtapa[] }) {
   }
 
   return (
+    // El envoltorio recorta y desplaza; la fila de adentro crece con las
+    // columnas. Si el propio contenedor flex hace de scroller, la página
+    // termina desplazándose a un lienzo vacío en pantallas angostas.
     <div
       className={cx(
-        "flex gap-3 overflow-x-auto pb-4",
+        "w-full overflow-x-auto pb-4",
         pendiente && "pointer-events-none opacity-60",
       )}
     >
+      <div className="flex w-max gap-3">
       {columnas.map((columna) => (
         <section
           key={columna.id}
@@ -89,7 +93,11 @@ export function Tablero({ columnas }: { columnas: ColumnaEtapa[] }) {
                 onDragStart={() => setArrastrando(t.id)}
                 onDragEnd={() => setArrastrando(null)}
                 className={cx(
-                  "cursor-grab rounded-lg border border-tinta-200 bg-white p-3 shadow-sm active:cursor-grabbing",
+                  // `relative` no es decorativo: el `sr-only` de más abajo se
+                  // posiciona en absoluto y, sin un ancestro posicionado, su
+                  // bloque contenedor sería el viewport. Se escaparía del
+                  // recorte del scroller y estiraría la página a lo ancho.
+                  "relative cursor-grab rounded-lg border border-tinta-200 bg-white p-3 shadow-sm active:cursor-grabbing",
                   arrastrando === t.id && "opacity-40",
                 )}
               >
@@ -135,6 +143,7 @@ export function Tablero({ columnas }: { columnas: ColumnaEtapa[] }) {
           </div>
         </section>
       ))}
+      </div>
     </div>
   );
 }

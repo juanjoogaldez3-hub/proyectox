@@ -5,8 +5,9 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
+import type { Empresa } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { planEfectivo } from "@/lib/planes";
+import { planEfectivo, pruebaVigente, suscripcionVigente } from "@/lib/planes";
 
 export const COOKIE_SESION = "crm_sesion";
 const DURACION_SESION_SEG = 60 * 60 * 24 * 30; // 30 dias
@@ -77,13 +78,36 @@ export const sesionActual = cache(async () => {
   });
   if (!usuario || !usuario.activo) return null;
 
-  const { empresa, passwordHash: _passwordHash, ...datosUsuario } = usuario;
+  const { empresa: empresaGuardada, passwordHash: _passwordHash, ...datosUsuario } = usuario;
+  const empresa = await sincronizarSuscripcion(empresaGuardada);
+
   return {
     usuario: datosUsuario,
     empresa,
     plan: planEfectivo(empresa),
   };
 });
+
+/**
+ * Marca la suscripcion como VENCIDA cuando se acabo la prueba o el periodo
+ * pagado. `planEfectivo` ya baja los limites por su cuenta; esto solo deja el
+ * estado guardado igual a la realidad para que la interfaz y los reportes no
+ * digan "activa" sobre una cuenta que ya no lo esta. Solo escribe en la
+ * transicion, no en cada visita.
+ */
+async function sincronizarSuscripcion<T extends Empresa>(empresa: T): Promise<T> {
+  const debeVencer =
+    (empresa.estadoSuscripcion === "ACTIVA" && !suscripcionVigente(empresa)) ||
+    (empresa.estadoSuscripcion === "PRUEBA" && !pruebaVigente(empresa));
+
+  if (!debeVencer) return empresa;
+
+  await prisma.empresa.update({
+    where: { id: empresa.id },
+    data: { estadoSuscripcion: "VENCIDA" },
+  });
+  return { ...empresa, estadoSuscripcion: "VENCIDA" as const };
+}
 
 /** Para paginas y acciones dentro de /app: garantiza sesion o manda al login. */
 export async function requerirSesion(): Promise<Sesion> {

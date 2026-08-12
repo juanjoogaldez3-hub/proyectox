@@ -50,7 +50,7 @@ export function FormularioProducto({
       {estado?.error && <Aviso tono="peligro">{estado.error}</Aviso>}
 
       <Tarjeta className="p-5">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Campo etiqueta="Nombre *" className="sm:col-span-2">
             <input
               name="nombre"
@@ -143,7 +143,7 @@ export function FormularioProducto({
         </label>
 
         {controla && (
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             {esNuevo && (
               <Campo etiqueta="Existencia inicial">
                 <input

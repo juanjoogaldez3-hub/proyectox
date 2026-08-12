@@ -46,7 +46,7 @@ export function FormularioPago({ planActual }: { planActual: Plan }) {
           {estado?.ok && <Aviso tono="exito">Pago registrado. Tu plan quedó activo.</Aviso>}
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Campo etiqueta="Plan">
             <select
               name="plan"

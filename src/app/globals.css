@@ -88,6 +88,26 @@
   }
 }
 
+/*
+ * Paleta de las gráficas. El acento de serie única y la rampa ordinal del
+ * embudo están verificados contra la superficie blanca con el validador de
+ * la guía de visualización (contraste, monotonía de luminosidad y separación
+ * entre pasos). Si cambiás un valor, hay que volver a validarlos.
+ */
+.viz {
+  --viz-superficie: #ffffff;
+  --viz-serie: #1f47e0;
+  --viz-riel: #eef0f4;
+  --viz-rejilla: #dfe3ea;
+
+  --viz-paso-1: #7aa5ff;
+  --viz-paso-2: #598eff;
+  --viz-paso-3: #3366f5;
+  --viz-paso-4: #1f47e0;
+  --viz-paso-5: #1a37b5;
+  --viz-paso-6: #152a80;
+}
+
 /* Impresion de cotizaciones y facturas: solo el documento, sin navegacion. */
 @media print {
   .no-imprimir {

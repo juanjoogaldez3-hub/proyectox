@@ -75,29 +75,56 @@ export function limiteDe(plan: Plan, recurso: Recurso): number {
   return PLANES[plan].limites[recurso];
 }
 
-/**
- * La prueba da acceso al plan Emprendedor; al vencer, la empresa cae a los
- * limites del plan Gratis en lugar de quedarse sin acceso.
- */
-export function planEfectivo(empresa: {
+export type SuscripcionDeEmpresa = {
   plan: Plan;
   estadoSuscripcion: string;
   pruebaTermina: Date | null;
-}): Plan {
-  if (empresa.estadoSuscripcion === "ACTIVA") return empresa.plan;
-  if (
+  planRenuevaEl: Date | null;
+};
+
+/** Un plan de paga solo vale mientras el periodo pagado siga vigente. */
+export function suscripcionVigente(empresa: SuscripcionDeEmpresa): boolean {
+  if (empresa.estadoSuscripcion !== "ACTIVA") return false;
+  // Sin fecha de renovacion la tratamos como vigente: es una cuenta que alguien
+  // activo a mano y no queremos cortarle el servicio por un dato faltante.
+  if (!empresa.planRenuevaEl) return true;
+  return empresa.planRenuevaEl.getTime() > Date.now();
+}
+
+export function pruebaVigente(empresa: SuscripcionDeEmpresa): boolean {
+  return (
     empresa.estadoSuscripcion === "PRUEBA" &&
-    empresa.pruebaTermina &&
+    empresa.pruebaTermina !== null &&
     empresa.pruebaTermina.getTime() > Date.now()
-  ) {
+  );
+}
+
+/**
+ * Plan con el que realmente trabaja la cuenta hoy. La prueba da acceso al plan
+ * Emprendedor y, cuando la prueba o el periodo pagado se vencen, la empresa cae
+ * a los limites del plan Gratis en lugar de quedarse sin acceso.
+ */
+export function planEfectivo(empresa: SuscripcionDeEmpresa): Plan {
+  if (suscripcionVigente(empresa)) return empresa.plan;
+  if (pruebaVigente(empresa)) {
     return empresa.plan === "GRATIS" ? "EMPRENDEDOR" : empresa.plan;
   }
   return "GRATIS";
 }
 
+/** true cuando la cuenta pagó pero el periodo ya pasó y hay que renovar. */
+export function suscripcionSeVencio(empresa: SuscripcionDeEmpresa): boolean {
+  if (empresa.estadoSuscripcion === "VENCIDA") return true;
+  return empresa.estadoSuscripcion === "ACTIVA" && !suscripcionVigente(empresa);
+}
+
 export function diasRestantesDePrueba(pruebaTermina: Date | null): number {
-  if (!pruebaTermina) return 0;
-  const ms = pruebaTermina.getTime() - Date.now();
+  return diasRestantesHasta(pruebaTermina);
+}
+
+export function diasRestantesHasta(fecha: Date | null): number {
+  if (!fecha) return 0;
+  const ms = fecha.getTime() - Date.now();
   return ms <= 0 ? 0 : Math.ceil(ms / 86_400_000);
 }
 

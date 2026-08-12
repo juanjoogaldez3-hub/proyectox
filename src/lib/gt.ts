@@ -24,6 +24,23 @@ export function quetzales(monto: number | string | null | undefined): string {
   return formatoQuetzales.format(aNumero(monto));
 }
 
+const formatoQuetzalesEnteros = new Intl.NumberFormat("es-GT", {
+  style: "currency",
+  currency: "GTQ",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+/**
+ * Q21,063 — para cifras de resumen, donde los centavos no aportan y en cambio
+ * hacen que el número se salga de su tarjeta. El monto exacto siempre queda
+ * en la tabla o en el documento.
+ */
+export function quetzalesCorto(monto: number | string | null | undefined): string {
+  const n = aNumero(monto);
+  return Math.abs(n) >= 1000 ? formatoQuetzalesEnteros.format(n) : formatoQuetzales.format(n);
+}
+
 /** 1,234.56 (sin simbolo, para tablas y PDFs) */
 export function numero(monto: number | string | null | undefined): string {
   return formatoNumero.format(aNumero(monto));
@@ -192,6 +209,82 @@ const formatoFechaHora = new Intl.DateTimeFormat("es-GT", {
 export function fecha(valor: Date | string | null | undefined): string {
   if (!valor) return "";
   return formatoFecha.format(new Date(valor));
+}
+
+/**
+ * Guatemala está en UTC-6 y no cambia de hora: no hay horario de verano desde
+ * 2006. Eso permite calcular los cortes de día y de mes con aritmética simple
+ * en vez de arrastrar una librería de zonas horarias.
+ *
+ * Importa porque el servidor casi siempre corre en UTC: sin esto, "este mes"
+ * empieza a las 6 de la tarde del último día del mes anterior, hora local.
+ */
+export const HORAS_DETRAS_DE_UTC = 6;
+
+export const ZONA_GT = "America/Guatemala";
+
+const partesGT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: ZONA_GT,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** Año, mes (0-11) y día que son "hoy" en Guatemala, sin importar el servidor. */
+export function hoyEnGuatemala(referencia: Date = new Date()): {
+  ano: number;
+  mes: number;
+  dia: number;
+} {
+  const [ano, mes, dia] = partesGT.format(referencia).split("-").map(Number);
+  return { ano, mes: mes - 1, dia };
+}
+
+/** Instante exacto en que empieza ese día en Guatemala. */
+export function inicioDelDiaGT(ano: number, mes: number, dia: number): Date {
+  return new Date(Date.UTC(ano, mes, dia, HORAS_DETRAS_DE_UTC, 0, 0, 0));
+}
+
+/** Instante en que arrancó el mes actual en Guatemala. */
+export function inicioDelMesGT(referencia: Date = new Date()): Date {
+  const { ano, mes } = hoyEnGuatemala(referencia);
+  return inicioDelDiaGT(ano, mes, 1);
+}
+
+/** Instante en que arrancó el día de hoy en Guatemala. */
+export function inicioDeHoyGT(referencia: Date = new Date()): Date {
+  const { ano, mes, dia } = hoyEnGuatemala(referencia);
+  return inicioDelDiaGT(ano, mes, dia);
+}
+
+/** Último instante del día de hoy en Guatemala. */
+export function finDeHoyGT(referencia: Date = new Date()): Date {
+  const { ano, mes, dia } = hoyEnGuatemala(referencia);
+  return new Date(inicioDelDiaGT(ano, mes, dia + 1).getTime() - 1);
+}
+
+const MESES_CORTOS = [
+  "ene",
+  "feb",
+  "mar",
+  "abr",
+  "may",
+  "jun",
+  "jul",
+  "ago",
+  "sep",
+  "oct",
+  "nov",
+  "dic",
+];
+
+/**
+ * Nombre corto de un mes a partir de sus componentes de calendario. No pasa por
+ * una zona horaria porque un mes es una casilla del calendario, no un instante:
+ * convertirlo lo correría de casilla.
+ */
+export function nombreDeMes(mes: number): string {
+  return MESES_CORTOS[((mes % 12) + 12) % 12];
 }
 
 export function fechaHora(valor: Date | string | null | undefined): string {

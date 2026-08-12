@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requerirSesion } from "@/lib/auth";
 import { NavegacionLateral, NavegacionMovil } from "@/components/navegacion";
 import { Icono } from "@/components/iconos";
-import { PLANES, diasRestantesDePrueba } from "@/lib/planes";
+import { PLANES, diasRestantesDePrueba, diasRestantesHasta } from "@/lib/planes";
 import { salir } from "../(auth)/acciones";
 
 export default async function LayoutApp({ children }: { children: React.ReactNode }) {
@@ -11,6 +11,14 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
     empresa.estadoSuscripcion === "PRUEBA"
       ? diasRestantesDePrueba(empresa.pruebaTermina)
       : 0;
+  // Aviso de renovación para planes de paga que están por vencerse.
+  const diasDePlan =
+    empresa.estadoSuscripcion === "ACTIVA"
+      ? diasRestantesHasta(empresa.planRenuevaEl)
+      : 0;
+  // Distinguimos "se acabó la prueba" de "se venció lo que pagaste": el mensaje
+  // y lo que tiene que hacer el usuario son distintos.
+  const nuncaPago = empresa.planRenuevaEl === null;
 
   return (
     <div className="flex min-h-screen bg-tinta-50">
@@ -53,11 +61,23 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
           </div>
         )}
 
+        {diasDePlan > 0 && diasDePlan <= 5 && (
+          <div className="no-imprimir border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+            Tu plan vence en {diasDePlan} día{diasDePlan === 1 ? "" : "s"}.{" "}
+            <Link href="/app/configuracion/plan" className="font-medium underline">
+              Registrá tu pago
+            </Link>{" "}
+            para no quedarte sin las funciones que estás usando.
+          </div>
+        )}
+
         {empresa.estadoSuscripcion === "VENCIDA" && (
           <div className="no-imprimir border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
-            Tu suscripción está vencida y la cuenta trabaja con los límites del plan Gratis.{" "}
+            {nuncaPago
+              ? "Se acabó tu prueba gratis. La cuenta sigue trabajando con los límites del plan Gratis y no se borró nada."
+              : "Tu suscripción venció y la cuenta trabaja con los límites del plan Gratis."}{" "}
             <Link href="/app/configuracion/plan" className="font-medium underline">
-              Reactivá tu plan
+              {nuncaPago ? "Activá tu plan" : "Renová tu plan"}
             </Link>
             .
           </div>

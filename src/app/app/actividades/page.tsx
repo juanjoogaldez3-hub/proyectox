@@ -5,7 +5,7 @@ import { requerirSesion } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { BotonEnlace, EncabezadoPagina, EstadoVacio, Insignia, Tarjeta, cx } from "@/components/ui";
 import { Icono } from "@/components/iconos";
-import { fechaHora, tiempoRelativo } from "@/lib/gt";
+import { fechaHora, finDeHoyGT, tiempoRelativo } from "@/lib/gt";
 import { alternarActividad, eliminarActividad } from "./acciones";
 
 export const metadata: Metadata = { title: "Actividades" };
@@ -20,8 +20,7 @@ const FILTROS = [
 type Filtro = (typeof FILTROS)[number]["valor"];
 
 function condicionDelFiltro(filtro: Filtro): Prisma.ActividadWhereInput {
-  const finDelDia = new Date();
-  finDelDia.setHours(23, 59, 59, 999);
+  const finDelDia = finDeHoyGT();
 
   switch (filtro) {
     case "hoy":

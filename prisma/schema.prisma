@@ -86,8 +86,25 @@ model Usuario {
   movimientos        MovimientoInventario[]
   cotizaciones       Cotizacion[]
   ventas             Venta[]
+  tokensRecuperacion TokenRecuperacion[]
 
   @@index([empresaId])
+}
+
+/**
+ * Enlace de un solo uso para restablecer la contrasena. Se guarda el hash del
+ * token, no el token: si alguien lee la base de datos no puede usarlo.
+ */
+model TokenRecuperacion {
+  id        String    @id @default(cuid())
+  usuarioId String
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiraEl  DateTime
+  usadoEl   DateTime?
+  creadoEl  DateTime  @default(now())
+
+  @@index([usuarioId])
 }
 
 model PagoSuscripcion {
@@ -344,6 +361,13 @@ model Cotizacion {
   notas         String?
   condiciones   String?
   enviadaEl     DateTime?
+  // Token del enlace publico que se le manda al cliente por WhatsApp. Solo
+  // existe si el usuario decidio compartirla; se puede revocar poniendolo a null.
+  tokenPublico  String?          @unique
+  vistaEl       DateTime?
+  aceptadaEl    DateTime?
+  // Nombre que escribio el cliente al aceptar desde el enlace publico.
+  aceptadaPor   String?
   creadaPorId   String?
   creadaPor     Usuario?         @relation(fields: [creadaPorId], references: [id], onDelete: SetNull)
   creadoEl      DateTime         @default(now())

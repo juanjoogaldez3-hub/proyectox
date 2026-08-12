@@ -116,7 +116,7 @@ export default async function PaginaInicio() {
       </section>
 
       <section className="border-y border-tinta-200 bg-tinta-50">
-        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-14 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mx-auto grid grid-cols-1 max-w-6xl gap-6 px-4 py-14 sm:grid-cols-2 lg:grid-cols-3">
           {FUNCIONES.map((f) => (
             <Tarjeta key={f.titulo} className="p-5">
               <h3 className="text-base font-semibold text-tinta-900">{f.titulo}</h3>
@@ -136,7 +136,7 @@ export default async function PaginaInicio() {
           </p>
         </div>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-3">
+        <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-3">
           {Object.values(PLANES).map((plan) => {
             const destacado = plan.id === "EMPRENDEDOR";
             return (

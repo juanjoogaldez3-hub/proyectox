@@ -64,7 +64,7 @@ export function EditorLineas({
         {lineas.map((linea, i) => (
           <div
             key={i}
-            className="grid gap-2 rounded-lg border border-tinta-200 p-3 sm:grid-cols-12"
+            className="grid grid-cols-1 gap-2 rounded-lg border border-tinta-200 p-3 sm:grid-cols-12"
           >
             <div className="sm:col-span-5">
               <label className="etiqueta-campo">Producto</label>

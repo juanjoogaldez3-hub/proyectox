@@ -14,6 +14,7 @@ const SECCIONES: { href: string; texto: string; icono: NombreIcono }[] = [
   { href: "/app/cotizaciones", texto: "Cotizaciones", icono: "cotizaciones" },
   { href: "/app/ventas", texto: "Ventas", icono: "ventas" },
   { href: "/app/productos", texto: "Productos", icono: "productos" },
+  { href: "/app/reportes", texto: "Reportes", icono: "reportes" },
   { href: "/app/configuracion", texto: "Configuración", icono: "configuracion" },
 ];
 

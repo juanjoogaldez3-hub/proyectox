@@ -36,7 +36,7 @@ export function FormularioUsuario() {
           {estado?.ok && <Aviso tono="exito">Usuario creado.</Aviso>}
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Campo etiqueta="Nombre *">
             <input name="nombre" required className="campo" placeholder="Juan Pérez" />
           </Campo>

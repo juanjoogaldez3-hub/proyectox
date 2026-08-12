@@ -4,7 +4,7 @@ import { requerirSesion } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { BotonEnlace, EncabezadoPagina, EstadoVacio, Insignia, Tarjeta } from "@/components/ui";
 import { Icono } from "@/components/iconos";
-import { aNumero, fecha, quetzales } from "@/lib/gt";
+import { aNumero, fecha, inicioDelMesGT, quetzales } from "@/lib/gt";
 
 export const metadata: Metadata = { title: "Ventas" };
 
@@ -17,9 +17,7 @@ const TONO_ESTADO = {
 export default async function PaginaVentas() {
   const { empresa } = await requerirSesion();
 
-  const inicioMes = new Date();
-  inicioMes.setDate(1);
-  inicioMes.setHours(0, 0, 0, 0);
+  const inicioMes = inicioDelMesGT();
 
   const [ventas, resumenMes, porCobrar] = await Promise.all([
     prisma.venta.findMany({
@@ -52,7 +50,7 @@ export default async function PaginaVentas() {
         }
       />
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2">
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Tarjeta className="p-4">
           <p className="text-xs font-medium uppercase tracking-wide text-tinta-500">
             Vendido este mes

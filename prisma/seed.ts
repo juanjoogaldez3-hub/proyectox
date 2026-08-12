@@ -288,36 +288,76 @@ async function main() {
     },
   });
 
-  // Venta ya cerrada del mes, con su salida de inventario.
-  const ventaSubtotal = 1500;
-  const ventaIva = Math.round(ventaSubtotal * 0.12 * 100) / 100;
-  await prisma.venta.create({
-    data: {
-      empresaId: empresa.id,
-      numero: 1,
-      contactoId: contactos[5].id,
-      estado: "PAGADA",
-      metodoPago: "Transferencia",
-      nitCliente: "1357924",
-      nombreFactura: "Súper Chacón",
-      subtotal: ventaSubtotal,
-      iva: ventaIva,
-      total: ventaSubtotal + ventaIva,
-      creadaPorId: duena.id,
-      items: {
-        create: [
-          {
-            productoId: productos[4].id,
-            descripcion: productos[4].nombre,
-            cantidad: 1,
-            precioUnitario: 1500,
-            total: 1500,
-            orden: 0,
-          },
-        ],
+  // Historial de ventas de los últimos meses, para que los reportes tengan de
+  // dónde: sin esto las gráficas salen con una sola barra y no dicen nada.
+  const VENTAS_DEMO: {
+    mesesAtras: number;
+    dia: number;
+    contacto: number;
+    vendedor: "duena" | "vendedor";
+    metodo: string;
+    estado: "PAGADA" | "PENDIENTE";
+    lineas: { producto: number; cantidad: number }[];
+  }[] = [
+    { mesesAtras: 5, dia: 8, contacto: 0, vendedor: "duena", metodo: "Efectivo", estado: "PAGADA", lineas: [{ producto: 0, cantidad: 25 }] },
+    { mesesAtras: 5, dia: 22, contacto: 2, vendedor: "vendedor", metodo: "Transferencia", estado: "PAGADA", lineas: [{ producto: 3, cantidad: 18 }] },
+    { mesesAtras: 4, dia: 5, contacto: 1, vendedor: "vendedor", metodo: "Depósito", estado: "PAGADA", lineas: [{ producto: 1, cantidad: 12 }, { producto: 3, cantidad: 10 }] },
+    { mesesAtras: 4, dia: 19, contacto: 5, vendedor: "duena", metodo: "Efectivo", estado: "PAGADA", lineas: [{ producto: 2, cantidad: 4 }] },
+    { mesesAtras: 3, dia: 3, contacto: 0, vendedor: "duena", metodo: "Transferencia", estado: "PAGADA", lineas: [{ producto: 0, cantidad: 40 }] },
+    { mesesAtras: 3, dia: 14, contacto: 3, vendedor: "vendedor", metodo: "Depósito", estado: "PAGADA", lineas: [{ producto: 2, cantidad: 6 }, { producto: 0, cantidad: 15 }] },
+    { mesesAtras: 2, dia: 9, contacto: 2, vendedor: "vendedor", metodo: "Efectivo", estado: "PAGADA", lineas: [{ producto: 3, cantidad: 22 }] },
+    { mesesAtras: 2, dia: 27, contacto: 1, vendedor: "duena", metodo: "Tarjeta", estado: "PAGADA", lineas: [{ producto: 1, cantidad: 20 }] },
+    { mesesAtras: 1, dia: 6, contacto: 5, vendedor: "duena", metodo: "Transferencia", estado: "PAGADA", lineas: [{ producto: 0, cantidad: 30 }, { producto: 2, cantidad: 3 }] },
+    { mesesAtras: 1, dia: 21, contacto: 4, vendedor: "vendedor", metodo: "Efectivo", estado: "PAGADA", lineas: [{ producto: 3, cantidad: 14 }] },
+    { mesesAtras: 0, dia: 4, contacto: 5, vendedor: "duena", metodo: "Transferencia", estado: "PAGADA", lineas: [{ producto: 4, cantidad: 1 }] },
+    { mesesAtras: 0, dia: 9, contacto: 0, vendedor: "vendedor", metodo: "Crédito", estado: "PENDIENTE", lineas: [{ producto: 0, cantidad: 20 }, { producto: 3, cantidad: 8 }] },
+  ];
+
+  const hoy = new Date();
+  let numeroVenta = 0;
+
+  for (const venta of VENTAS_DEMO) {
+    numeroVenta += 1;
+    // Mediodía en hora de Guatemala, para que la venta caiga en su mes sin dudas.
+    const fecha = new Date(
+      Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() - venta.mesesAtras, venta.dia, 18, 0, 0),
+    );
+    const lineas = venta.lineas.map((l) => ({
+      producto: productos[l.producto],
+      cantidad: l.cantidad,
+    }));
+    const subtotal = lineas.reduce((acc, l) => acc + l.cantidad * Number(l.producto.precio), 0);
+    const iva = Math.round(subtotal * 0.12 * 100) / 100;
+    const contacto = contactos[venta.contacto];
+
+    await prisma.venta.create({
+      data: {
+        empresaId: empresa.id,
+        numero: numeroVenta,
+        contactoId: contacto.id,
+        estado: venta.estado,
+        metodoPago: venta.metodo,
+        fecha,
+        creadoEl: fecha,
+        nitCliente: contacto.nit ?? "CF",
+        nombreFactura: contacto.negocio ?? contacto.nombre,
+        subtotal,
+        iva,
+        total: subtotal + iva,
+        creadaPorId: venta.vendedor === "duena" ? duena.id : vendedor.id,
+        items: {
+          create: lineas.map((l, orden) => ({
+            productoId: l.producto.id,
+            descripcion: l.producto.nombre,
+            cantidad: l.cantidad,
+            precioUnitario: l.producto.precio,
+            total: l.cantidad * Number(l.producto.precio),
+            orden,
+          })),
+        },
       },
-    },
-  });
+    });
+  }
 
   console.log("Datos de demostración listos.");
   console.log(`  Empresa:    ${empresa.nombre}`);

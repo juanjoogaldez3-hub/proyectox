@@ -4,22 +4,9 @@ import { requerirSesion } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { BotonEnlace, EstadoVacio, Insignia, Tarjeta } from "@/components/ui";
 import { Icono } from "@/components/iconos";
-import { aNumero, quetzales, tiempoRelativo } from "@/lib/gt";
+import { aNumero, finDeHoyGT, inicioDelMesGT, quetzales, tiempoRelativo } from "@/lib/gt";
 
 export const metadata: Metadata = { title: "Resumen" };
-
-function inicioDelMes(): Date {
-  const d = new Date();
-  d.setDate(1);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function finDelDia(): Date {
-  const d = new Date();
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
 
 function Metrica({
   titulo,
@@ -44,7 +31,7 @@ function Metrica({
 export default async function PaginaResumen() {
   const { empresa, usuario } = await requerirSesion();
   const empresaId = empresa.id;
-  const desde = inicioDelMes();
+  const desde = inicioDelMesGT();
 
   const [
     ventasMes,
@@ -67,7 +54,7 @@ export default async function PaginaResumen() {
       _count: true,
     }),
     prisma.actividad.count({
-      where: { empresaId, completada: false, venceEl: { lte: finDelDia() } },
+      where: { empresaId, completada: false, venceEl: { lte: finDeHoyGT() } },
     }),
     prisma.actividad.count({
       where: { empresaId, completada: false, venceEl: { lt: new Date() } },
@@ -119,7 +106,7 @@ export default async function PaginaResumen() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metrica
           titulo="Vendido este mes"
           valor={quetzales(aNumero(ventasMes._sum.total))}
@@ -159,7 +146,7 @@ export default async function PaginaResumen() {
         </Link>
       )}
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Tarjeta className="p-4 lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-tinta-900">Lo que sigue</h2>

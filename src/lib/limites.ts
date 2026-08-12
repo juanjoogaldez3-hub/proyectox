@@ -3,6 +3,7 @@ import "server-only";
 import { Plan } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ILIMITADO, PLANES, type Recurso, formatoLimite } from "@/lib/planes";
+import { inicioDelMesGT } from "@/lib/gt";
 
 /** Error que la interfaz muestra como aviso de plan, no como falla del sistema. */
 export class LimitePlanError extends Error {
@@ -24,9 +25,7 @@ async function usoActual(empresaId: string, recurso: Recurso): Promise<number> {
     case "productos":
       return prisma.producto.count({ where: { empresaId, activo: true } });
     case "cotizacionesPorMes": {
-      const inicioMes = new Date();
-      inicioMes.setDate(1);
-      inicioMes.setHours(0, 0, 0, 0);
+      const inicioMes = inicioDelMesGT();
       return prisma.cotizacion.count({
         where: { empresaId, creadoEl: { gte: inicioMes } },
       });

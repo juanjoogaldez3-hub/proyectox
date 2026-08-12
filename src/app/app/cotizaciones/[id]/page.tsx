@@ -198,7 +198,7 @@ export default async function PaginaCotizacion({
         </div>
 
         {(cotizacion.notas || cotizacion.condiciones) && (
-          <div className="mt-6 grid gap-4 border-t border-tinta-200 pt-5 text-xs text-tinta-600 sm:grid-cols-2">
+          <div className="mt-6 grid grid-cols-1 gap-4 border-t border-tinta-200 pt-5 text-xs text-tinta-600 sm:grid-cols-2">
             {cotizacion.notas && (
               <div>
                 <p className="font-semibold uppercase tracking-wide text-tinta-500">Notas</p>
