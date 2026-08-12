@@ -1,0 +1,425 @@
+// CRM Chapin - esquema multi-tenant.
+// Toda tabla de negocio cuelga de `Empresa` (el tenant) y se filtra por `empresaId`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tenant, usuarios y suscripcion
+// ---------------------------------------------------------------------------
+
+enum Plan {
+  GRATIS
+  EMPRENDEDOR
+  NEGOCIO
+}
+
+enum EstadoSuscripcion {
+  PRUEBA
+  ACTIVA
+  VENCIDA
+  CANCELADA
+}
+
+enum Rol {
+  PROPIETARIO
+  ADMIN
+  VENDEDOR
+}
+
+model Empresa {
+  id                String            @id @default(cuid())
+  nombre            String
+  slug              String            @unique
+  nit               String?
+  telefono          String?
+  direccion         String?
+  departamento      String?
+  municipio         String?
+  logoUrl           String?
+  // Impuesto sobre ventas: en Guatemala el IVA general es 12%.
+  ivaPorcentaje     Decimal           @default(12) @db.Decimal(5, 2)
+  moneda            String            @default("GTQ")
+  plan              Plan              @default(GRATIS)
+  estadoSuscripcion EstadoSuscripcion @default(PRUEBA)
+  pruebaTermina     DateTime?
+  planRenuevaEl     DateTime?
+  creadoEl          DateTime          @default(now())
+  actualizadoEl     DateTime          @updatedAt
+
+  usuarios     Usuario[]
+  contactos    Contacto[]
+  etapas       EtapaEmbudo[]
+  oportunidades Oportunidad[]
+  actividades  Actividad[]
+  notas        Nota[]
+  productos    Producto[]
+  movimientos  MovimientoInventario[]
+  cotizaciones Cotizacion[]
+  ventas       Venta[]
+  pagos        PagoSuscripcion[]
+}
+
+model Usuario {
+  id           String   @id @default(cuid())
+  empresaId    String
+  empresa      Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nombre       String
+  email        String   @unique
+  passwordHash String
+  telefono     String?
+  rol          Rol      @default(VENDEDOR)
+  activo       Boolean  @default(true)
+  ultimoAcceso DateTime?
+  creadoEl     DateTime @default(now())
+
+  contactosAsignados Contacto[]             @relation("ContactoResponsable")
+  oportunidades      Oportunidad[]
+  actividades        Actividad[]
+  notas              Nota[]
+  movimientos        MovimientoInventario[]
+  cotizaciones       Cotizacion[]
+  ventas             Venta[]
+
+  @@index([empresaId])
+}
+
+model PagoSuscripcion {
+  id          String   @id @default(cuid())
+  empresaId   String
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  plan        Plan
+  monto       Decimal  @db.Decimal(12, 2)
+  // Los emprendedores en Guatemala suelen pagar por deposito o transferencia.
+  metodo      String
+  referencia  String?
+  cubreDesde  DateTime
+  cubreHasta  DateTime
+  confirmado  Boolean  @default(false)
+  creadoEl    DateTime @default(now())
+
+  @@index([empresaId])
+}
+
+// ---------------------------------------------------------------------------
+// CRM: contactos, embudo, actividades
+// ---------------------------------------------------------------------------
+
+enum OrigenContacto {
+  WHATSAPP
+  FACEBOOK
+  INSTAGRAM
+  TIKTOK
+  REFERIDO
+  SITIO_WEB
+  LLAMADA
+  VISITA
+  FERIA
+  OTRO
+}
+
+model Contacto {
+  id             String         @id @default(cuid())
+  empresaId      String
+  empresa        Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nombre         String
+  negocio        String?
+  email          String?
+  telefono       String?
+  // Se guarda en formato internacional (502XXXXXXXX) para armar enlaces wa.me.
+  whatsapp       String?
+  nit            String?
+  direccion      String?
+  departamento   String?
+  municipio      String?
+  origen         OrigenContacto @default(WHATSAPP)
+  etiquetas      String[]       @default([])
+  notas          String?
+  responsableId  String?
+  responsable    Usuario?       @relation("ContactoResponsable", fields: [responsableId], references: [id], onDelete: SetNull)
+  creadoEl       DateTime       @default(now())
+  actualizadoEl  DateTime       @updatedAt
+
+  oportunidades Oportunidad[]
+  actividades   Actividad[]
+  notasRel      Nota[]
+  cotizaciones  Cotizacion[]
+  ventas        Venta[]
+
+  @@index([empresaId])
+  @@index([empresaId, nombre])
+}
+
+model EtapaEmbudo {
+  id            String  @id @default(cuid())
+  empresaId     String
+  empresa       Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nombre        String
+  orden         Int
+  probabilidad  Int     @default(0)
+  color         String  @default("#2563eb")
+  esGanada      Boolean @default(false)
+  esPerdida     Boolean @default(false)
+
+  oportunidades Oportunidad[]
+
+  @@unique([empresaId, nombre])
+  @@index([empresaId, orden])
+}
+
+enum EstadoOportunidad {
+  ABIERTA
+  GANADA
+  PERDIDA
+}
+
+model Oportunidad {
+  id            String            @id @default(cuid())
+  empresaId     String
+  empresa       Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  titulo        String
+  contactoId    String
+  contacto      Contacto          @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  etapaId       String
+  etapa         EtapaEmbudo       @relation(fields: [etapaId], references: [id])
+  monto         Decimal           @default(0) @db.Decimal(12, 2)
+  estado        EstadoOportunidad @default(ABIERTA)
+  motivoPerdida String?
+  fechaCierre   DateTime?
+  responsableId String?
+  responsable   Usuario?          @relation(fields: [responsableId], references: [id], onDelete: SetNull)
+  creadoEl      DateTime          @default(now())
+  actualizadoEl DateTime          @updatedAt
+  cerradaEl     DateTime?
+
+  actividades  Actividad[]
+  notasRel     Nota[]
+  cotizaciones Cotizacion[]
+
+  @@index([empresaId])
+  @@index([empresaId, etapaId])
+}
+
+enum TipoActividad {
+  LLAMADA
+  WHATSAPP
+  CORREO
+  REUNION
+  VISITA
+  TAREA
+}
+
+model Actividad {
+  id            String        @id @default(cuid())
+  empresaId     String
+  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipo          TipoActividad @default(TAREA)
+  titulo        String
+  detalle       String?
+  venceEl       DateTime?
+  completada    Boolean       @default(false)
+  completadaEl  DateTime?
+  contactoId    String?
+  contacto      Contacto?     @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  oportunidadId String?
+  oportunidad   Oportunidad?  @relation(fields: [oportunidadId], references: [id], onDelete: Cascade)
+  usuarioId     String
+  usuario       Usuario       @relation(fields: [usuarioId], references: [id])
+  creadoEl      DateTime      @default(now())
+
+  @@index([empresaId, completada, venceEl])
+  @@index([contactoId])
+  @@index([oportunidadId])
+}
+
+model Nota {
+  id            String       @id @default(cuid())
+  empresaId     String
+  empresa       Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contenido     String
+  contactoId    String?
+  contacto      Contacto?    @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  oportunidadId String?
+  oportunidad   Oportunidad? @relation(fields: [oportunidadId], references: [id], onDelete: Cascade)
+  usuarioId     String
+  usuario       Usuario      @relation(fields: [usuarioId], references: [id])
+  creadoEl      DateTime     @default(now())
+
+  @@index([empresaId])
+  @@index([contactoId])
+  @@index([oportunidadId])
+}
+
+// ---------------------------------------------------------------------------
+// Inventario
+// ---------------------------------------------------------------------------
+
+model Producto {
+  id                 String   @id @default(cuid())
+  empresaId          String
+  empresa            Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nombre             String
+  sku                String?
+  descripcion        String?
+  precio             Decimal  @default(0) @db.Decimal(12, 2)
+  costo              Decimal  @default(0) @db.Decimal(12, 2)
+  unidad             String   @default("unidad")
+  // Los servicios no descuentan existencias.
+  controlaInventario Boolean  @default(true)
+  stock              Int      @default(0)
+  stockMinimo        Int      @default(0)
+  activo             Boolean  @default(true)
+  creadoEl           DateTime @default(now())
+  actualizadoEl      DateTime @updatedAt
+
+  movimientos     MovimientoInventario[]
+  itemsCotizacion CotizacionItem[]
+  itemsVenta      VentaItem[]
+
+  @@unique([empresaId, sku])
+  @@index([empresaId])
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  AJUSTE
+}
+
+model MovimientoInventario {
+  id         String         @id @default(cuid())
+  empresaId  String
+  empresa    Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  productoId String
+  producto   Producto       @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  tipo       TipoMovimiento
+  cantidad   Int
+  stockFinal Int
+  motivo     String?
+  referencia String?
+  usuarioId  String?
+  usuario    Usuario?       @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  creadoEl   DateTime       @default(now())
+
+  @@index([empresaId])
+  @@index([productoId])
+}
+
+// ---------------------------------------------------------------------------
+// Cotizaciones y ventas
+// ---------------------------------------------------------------------------
+
+enum EstadoCotizacion {
+  BORRADOR
+  ENVIADA
+  ACEPTADA
+  RECHAZADA
+  VENCIDA
+}
+
+model Cotizacion {
+  id            String           @id @default(cuid())
+  empresaId     String
+  empresa       Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  numero        Int
+  contactoId    String
+  contacto      Contacto         @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  oportunidadId String?
+  oportunidad   Oportunidad?     @relation(fields: [oportunidadId], references: [id], onDelete: SetNull)
+  estado        EstadoCotizacion @default(BORRADOR)
+  fecha         DateTime         @default(now())
+  validaHasta   DateTime?
+  // Copia del porcentaje vigente al emitir, para que el historico no cambie.
+  ivaPorcentaje Decimal          @default(12) @db.Decimal(5, 2)
+  subtotal      Decimal          @default(0) @db.Decimal(12, 2)
+  descuento     Decimal          @default(0) @db.Decimal(12, 2)
+  iva           Decimal          @default(0) @db.Decimal(12, 2)
+  total         Decimal          @default(0) @db.Decimal(12, 2)
+  notas         String?
+  condiciones   String?
+  enviadaEl     DateTime?
+  creadaPorId   String?
+  creadaPor     Usuario?         @relation(fields: [creadaPorId], references: [id], onDelete: SetNull)
+  creadoEl      DateTime         @default(now())
+  actualizadoEl DateTime         @updatedAt
+
+  items  CotizacionItem[]
+  ventas Venta[]
+
+  @@unique([empresaId, numero])
+  @@index([empresaId])
+}
+
+model CotizacionItem {
+  id             String     @id @default(cuid())
+  cotizacionId   String
+  cotizacion     Cotizacion @relation(fields: [cotizacionId], references: [id], onDelete: Cascade)
+  productoId     String?
+  producto       Producto?  @relation(fields: [productoId], references: [id], onDelete: SetNull)
+  descripcion    String
+  cantidad       Decimal    @default(1) @db.Decimal(12, 2)
+  precioUnitario Decimal    @default(0) @db.Decimal(12, 2)
+  total          Decimal    @default(0) @db.Decimal(12, 2)
+  orden          Int        @default(0)
+
+  @@index([cotizacionId])
+}
+
+enum EstadoVenta {
+  PENDIENTE
+  PAGADA
+  ANULADA
+}
+
+model Venta {
+  id            String      @id @default(cuid())
+  empresaId     String
+  empresa       Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  numero        Int
+  contactoId    String
+  contacto      Contacto    @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  cotizacionId  String?
+  cotizacion    Cotizacion? @relation(fields: [cotizacionId], references: [id], onDelete: SetNull)
+  estado        EstadoVenta @default(PENDIENTE)
+  fecha         DateTime    @default(now())
+  metodoPago    String      @default("Efectivo")
+  // Datos que pide la factura guatemalteca; "CF" = consumidor final.
+  nitCliente    String?     @default("CF")
+  nombreFactura String?
+  ivaPorcentaje Decimal     @default(12) @db.Decimal(5, 2)
+  subtotal      Decimal     @default(0) @db.Decimal(12, 2)
+  descuento     Decimal     @default(0) @db.Decimal(12, 2)
+  iva           Decimal     @default(0) @db.Decimal(12, 2)
+  total         Decimal     @default(0) @db.Decimal(12, 2)
+  notas         String?
+  creadaPorId   String?
+  creadaPor     Usuario?    @relation(fields: [creadaPorId], references: [id], onDelete: SetNull)
+  creadoEl      DateTime    @default(now())
+
+  items VentaItem[]
+
+  @@unique([empresaId, numero])
+  @@index([empresaId])
+  @@index([empresaId, fecha])
+}
+
+model VentaItem {
+  id             String    @id @default(cuid())
+  ventaId        String
+  venta          Venta     @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  productoId     String?
+  producto       Producto? @relation(fields: [productoId], references: [id], onDelete: SetNull)
+  descripcion    String
+  cantidad       Decimal   @default(1) @db.Decimal(12, 2)
+  precioUnitario Decimal   @default(0) @db.Decimal(12, 2)
+  total          Decimal   @default(0) @db.Decimal(12, 2)
+  orden          Int       @default(0)
+
+  @@index([ventaId])
+}

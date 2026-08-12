@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@theme {
+  --color-marca-50: #eef4ff;
+  --color-marca-100: #d9e6ff;
+  --color-marca-200: #bcd3ff;
+  --color-marca-300: #8eb6ff;
+  --color-marca-400: #598eff;
+  --color-marca-500: #3366f5;
+  --color-marca-600: #1f47e0;
+  --color-marca-700: #1a37b5;
+  --color-marca-800: #1b3190;
+  --color-marca-900: #1c2e72;
+
+  --color-tinta-50: #f7f8fa;
+  --color-tinta-100: #eef0f4;
+  --color-tinta-200: #dfe3ea;
+  --color-tinta-300: #c5cbd6;
+  --color-tinta-400: #99a2b3;
+  --color-tinta-500: #6b7488;
+  --color-tinta-600: #4d5566;
+  --color-tinta-700: #3a4152;
+  --color-tinta-800: #262c3a;
+  --color-tinta-900: #171b26;
+
+  --color-exito: #0f9d58;
+  --color-alerta: #e8a33d;
+  --color-peligro: #d64545;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-tinta-50);
+    color: var(--color-tinta-800);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* El foco por defecto de Tailwind desaparece sobre fondos claros. */
+  :focus-visible {
+    outline: 2px solid var(--color-marca-500);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .campo {
+    display: block;
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-tinta-300);
+    background-color: #fff;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-tinta-900);
+  }
+
+  .campo::placeholder {
+    color: var(--color-tinta-400);
+  }
+
+  .campo:focus {
+    border-color: var(--color-marca-500);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-marca-100);
+  }
+
+  .etiqueta-campo {
+    display: block;
+    margin-bottom: 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--color-tinta-700);
+  }
+
+  .tarjeta {
+    border-radius: 0.75rem;
+    border: 1px solid var(--color-tinta-200);
+    background-color: #fff;
+    box-shadow: 0 1px 2px rgb(23 27 38 / 0.04);
+  }
+}
+
+/* Impresion de cotizaciones y facturas: solo el documento, sin navegacion. */
+@media print {
+  .no-imprimir {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .tarjeta {
+    border: none;
+    box-shadow: none;
+  }
+}
