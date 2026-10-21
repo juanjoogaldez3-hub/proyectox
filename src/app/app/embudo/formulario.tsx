@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { Aviso, Boton, Campo, Tarjeta } from "@/components/ui";
 import type { EstadoAccion } from "@/lib/acciones";
+import { partesLocalesGT } from "@/lib/gt";
 
 export type ValoresOportunidad = {
   titulo: string;
@@ -17,7 +18,7 @@ export type ValoresOportunidad = {
 
 function paraInputFecha(valor: Date | null | undefined): string {
   if (!valor) return "";
-  return valor.toISOString().slice(0, 10);
+  return partesLocalesGT(new Date(valor)).fecha;
 }
 
 function BotonGuardar({ texto }: { texto: string }) {

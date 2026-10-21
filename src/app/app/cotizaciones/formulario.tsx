@@ -11,7 +11,7 @@ import {
   type Linea,
   type OpcionProducto,
 } from "@/components/lineas";
-import { calcularTotales } from "@/lib/gt";
+import { calcularTotales, partesLocalesGT } from "@/lib/gt";
 import type { EstadoAccion } from "@/lib/acciones";
 
 export type ValoresCotizacion = {
@@ -25,7 +25,7 @@ export type ValoresCotizacion = {
 };
 
 function paraInputFecha(valor: Date | null | undefined): string {
-  return valor ? valor.toISOString().slice(0, 10) : "";
+  return valor ? partesLocalesGT(new Date(valor)).fecha : "";
 }
 
 function BotonGuardar({ texto }: { texto: string }) {
