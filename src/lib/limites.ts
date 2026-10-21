@@ -30,6 +30,12 @@ async function usoActual(empresaId: string, recurso: Recurso): Promise<number> {
         where: { empresaId, creadoEl: { gte: inicioMes } },
       });
     }
+    case "citasPorMes": {
+      const inicioMes = inicioDelMesGT();
+      return prisma.cita.count({
+        where: { empresaId, creadoEl: { gte: inicioMes } },
+      });
+    }
   }
 }
 
@@ -38,6 +44,7 @@ const ETIQUETA: Record<Recurso, string> = {
   contactos: "contactos",
   productos: "productos",
   cotizacionesPorMes: "cotizaciones este mes",
+  citasPorMes: "citas agendadas este mes",
 };
 
 /**
@@ -63,7 +70,13 @@ export async function verificarLimite(
 }
 
 export async function resumenDeUso(empresaId: string, plan: Plan) {
-  const recursos: Recurso[] = ["usuarios", "contactos", "productos", "cotizacionesPorMes"];
+  const recursos: Recurso[] = [
+    "usuarios",
+    "contactos",
+    "productos",
+    "cotizacionesPorMes",
+    "citasPorMes",
+  ];
   const conteos = await Promise.all(recursos.map((r) => usoActual(empresaId, r)));
   return recursos.map((recurso, i) => {
     const limite = PLANES[plan].limites[recurso];

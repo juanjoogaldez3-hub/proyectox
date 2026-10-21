@@ -1,10 +1,39 @@
 # CRM Chapín
 
-CRM para emprendedores y pequeñas empresas de Guatemala. Ordena clientes, da
-seguimiento por WhatsApp, arma cotizaciones con IVA en quetzales y lleva el
-inventario. Multi-tenant desde el primer día para venderse por suscripción.
+CRM para emprendedores, pequeñas empresas y clínicas médicas de Guatemala.
+Ordena clientes y pacientes, lleva la agenda de citas sincronizada con Google
+Calendar, manda recordatorios automáticos por WhatsApp, arma cotizaciones con
+IVA en quetzales y lleva el inventario. Multi-tenant desde el primer día para
+venderse por suscripción.
 
 ## Qué incluye
+
+**Agenda para clínicas y consultorios**
+- Agenda por día o por semana, filtrable por profesional (médico, odontólogo,
+  terapeuta…), con colores por profesional. Los profesionales no necesitan
+  usuario: la recepción agenda por ellos.
+- Citas con paciente, profesional, motivo, duración y notas internas. No deja
+  encimar dos citas del mismo profesional.
+- Estados: programada, confirmada, atendida, no asistió y cancelada. Cada cambio
+  queda anotado en el historial del paciente.
+- **Google Calendar para la clínica y para el paciente.** La clínica conecta su
+  cuenta de Google una vez (OAuth) y elige el calendario; cada profesional
+  puede ir a un calendario propio. Las citas se crean, mueven y borran solas en
+  Google. Si el paciente tiene correo, se le agrega como invitado y Google le
+  manda la invitación: la cita aparece en **su** Google Calendar y se actualiza
+  si se reprograma o cancela.
+- **Enlace del paciente** (`/cita/<token>`): ve su cita desde el celular sin
+  cuenta, la confirma o cancela de un clic, abre la dirección en Maps y la
+  agrega a Google Calendar o a iPhone/Outlook (`.ics`), aunque no tenga correo.
+- **Recordatorios automáticos por WhatsApp** con la API oficial de WhatsApp
+  Business (Cloud API de Meta), desde el número de cada clínica: confirmación
+  al agendar y dos recordatorios configurables (por defecto 24 h y 2 h antes).
+  Se ve si cada mensaje se envió, entregó o leyó, y los fallos se reintentan.
+- **Respuestas del paciente por WhatsApp:** si responde "1" (o "confirmo") la
+  cita queda confirmada; si responde "2" (o "cancelar") se cancela, se borra de
+  Google Calendar y se le contesta automáticamente. Cualquier otro mensaje queda
+  en su historial para que la recepción lo lea.
+- Citas de hoy en el tablero de resumen y en la ficha de cada paciente.
 
 **Núcleo CRM**
 - Contactos con teléfono, NIT, departamento, municipio, origen y etiquetas.
@@ -92,9 +121,11 @@ Con los datos de demostración podés entrar como:
 
 - **Propietaria:** `demo@crmchapin.gt` / `demo1234`
 - **Vendedor:** `vendedor@crmchapin.gt` / `demo1234`
+- **Clínica (agenda con profesionales y citas de esta semana):**
+  `clinica@crmchapin.gt` / `demo1234`
 
-`npm run db:seed` borra y recrea la empresa demo, así que no lo corras contra una
-base con información real.
+`npm run db:seed` borra y recrea las empresas demo, así que no lo corras contra
+una base con información real.
 
 ### Variables de entorno
 
@@ -104,9 +135,80 @@ base con información real.
 | `AUTH_SECRET` | Llave para firmar la sesión. Generala con `openssl rand -base64 32`. |
 | `NEXT_PUBLIC_APP_URL` | URL pública de la app, como respaldo para armar enlaces. |
 | `SMTP_*` | Correo saliente para recuperar contraseñas. Si lo dejás vacío, el enlace se escribe en el log del servidor en vez de enviarse. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Cliente OAuth de Google para conectar Google Calendar. |
+| `WHATSAPP_APP_SECRET` | App Secret de la app de Meta; con él se verifica la firma de cada envío al webhook. |
+| `WHATSAPP_VERIFY_TOKEN` | Texto libre que se pone en Meta al registrar el webhook. |
+| `CRON_SECRET` | Protege `/api/cron/recordatorios`. |
+| `CIFRADO_SECRETO` | Opcional. Llave para cifrar los tokens de Google y WhatsApp; si falta se deriva de `AUTH_SECRET`. |
+
+`NEXT_PUBLIC_APP_URL` es obligatoria si se usa la agenda: los enlaces que
+recibe el paciente por WhatsApp y la URL de retorno de Google se arman con ella,
+y como Next la incrusta al compilar, hay que definirla antes de `npm run build`.
 
 El servidor puede correr en cualquier zona horaria: los cortes de día y de mes
 se calculan siempre en hora de Guatemala (UTC-6, sin horario de verano).
+
+### Conectar Google Calendar
+
+1. En [Google Cloud Console](https://console.cloud.google.com/) creá un proyecto,
+   habilitá **Google Calendar API** y configurá la pantalla de consentimiento
+   OAuth (tipo externo; mientras esté "en prueba" agregá las cuentas que vayan
+   a conectar como usuarios de prueba).
+2. En Credenciales creá un **ID de cliente OAuth** de tipo aplicación web con la
+   URL de redireccionamiento `https://tu-dominio/api/google/callback`.
+3. Poné el ID y el secreto en `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
+4. Cada clínica entra a **Configuración → Google y WhatsApp → Conectar con
+   Google** y elige en qué calendario caen las citas.
+
+El permiso que se pide es `calendar` (leer la lista de calendarios y escribir
+eventos). El refresh token se guarda cifrado con AES-256-GCM.
+
+### Conectar WhatsApp
+
+Cada clínica usa su propio número de WhatsApp Business:
+
+1. En Meta for Developers creá una app de tipo Empresa con el producto
+   WhatsApp y registrá el número.
+2. En WhatsApp Manager creá la plantilla `recordatorio_cita` (categoría
+   *Utilidad*, español) con este cuerpo:
+
+   ```
+   Hola {{1}}, le recordamos su cita en {{2}} el {{3}}.
+
+   Confirme, cancele o agréguela a su calendario aquí: {{4}}
+
+   También puede responder 1 para confirmar o 2 para cancelar.
+   ```
+
+   `{{1}}` nombre del paciente · `{{2}}` clínica · `{{3}}` fecha, hora y
+   profesional · `{{4}}` enlace del paciente. Opcionalmente, una segunda
+   plantilla con los mismos parámetros para la confirmación al agendar.
+3. Generá un token permanente de un usuario del sistema con permiso
+   `whatsapp_business_messaging` y cargalo, junto con el *Phone Number ID*, en
+   **Configuración → Google y WhatsApp**. Al guardar se verifica contra Meta.
+4. Para recibir confirmaciones y estados de entrega, registrá el webhook
+   `https://tu-dominio/api/whatsapp/webhook` con `WHATSAPP_VERIFY_TOKEN` y
+   suscribí el campo `messages`. Los envíos sin la firma de `WHATSAPP_APP_SECRET`
+   se rechazan.
+
+Mientras WhatsApp no esté conectado, cada cita tiene un botón para mandar el
+recordatorio a mano por `wa.me`.
+
+### Tarea programada de recordatorios
+
+Los recordatorios se envían cuando alguien llama a `/api/cron/recordatorios`
+con `Authorization: Bearer $CRON_SECRET`. Programalo cada 5 minutos:
+
+```bash
+# crontab
+*/5 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://tu-dominio/api/cron/recordatorios
+```
+
+Sirve igual cron-job.org, un workflow programado de GitHub Actions o Vercel
+Cron (que manda solo ese encabezado si `CRON_SECRET` está definido). Cada
+recordatorio se reserva antes de enviarse, así que dos ejecuciones simultáneas
+no duplican mensajes. La confirmación al agendar no espera al cron: sale en el
+momento.
 
 ## Scripts
 
@@ -117,6 +219,7 @@ se calculan siempre en hora de Guatemala (UTC-6, sin horario de verano).
 | `npm start` | Sirve la compilación de producción. |
 | `npm run typecheck` | Revisa tipos sin compilar. |
 | `npm run db:migrate` | Crea y aplica migraciones en desarrollo. |
+| `npm run db:deploy` | Aplica las migraciones pendientes en producción (usa `DIRECT_URL` si existe). |
 | `npm run db:seed` | Carga los datos de demostración. |
 | `npm run db:studio` | Abre Prisma Studio. |
 
@@ -133,11 +236,18 @@ se calculan siempre en hora de Guatemala (UTC-6, sin horario de verano).
 src/
   app/
     (auth)/          registro, ingreso y cierre de sesión
+    (publico)/       enlaces sin cuenta: cotización (/c) y cita del paciente (/cita)
+    api/             cron de recordatorios, webhook de WhatsApp, OAuth de Google
     app/             la aplicación, protegida por requerirSesion()
-      contactos/  embudo/  actividades/
+      citas/  contactos/  embudo/  actividades/
       cotizaciones/  ventas/  productos/  configuracion/
   components/        UI compartida (botones, tarjetas, líneas de documento…)
   lib/
+    agenda.ts        recordatorios, respuestas del paciente, cron y webhook
+    citas.ts         estados, enlaces, .ics y textos de la agenda
+    google.ts        OAuth y sincronización con Google Calendar
+    whatsapp.ts      cliente de la API de WhatsApp Business
+    cifrado.ts       cifrado de los tokens de las integraciones
     auth.ts          sesión, hash de contraseñas, roles
     gt.ts            quetzales, IVA, NIT, teléfonos, departamentos
     limites.ts       límites por plan
@@ -152,6 +262,12 @@ del formulario. Las actualizaciones usan `updateMany` con `where: { id, empresaI
 para que un id de otra empresa no afecte nada. Está verificado con dos cuentas
 distintas: la segunda no ve ni un solo registro de la primera.
 
+## Publicar
+
+La guía paso a paso para dejarlo en línea con Vercel y Supabase, conectar
+Google Calendar y WhatsApp y activar los recordatorios está en
+[`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
+
 ## Antes de salir a producción
 
 Esto es un MVP funcional; para cobrarle a clientes reales conviene sumar:
@@ -163,5 +279,10 @@ Esto es un MVP funcional; para cobrarle a clientes reales conviene sumar:
 - **Un proveedor de correo conectado.** Sin `SMTP_*` configurado, los enlaces de
   recuperación quedan en el log del servidor en vez de llegarle al usuario.
 - **Respaldos de la base** y un plan de restauración.
+- **La tarea programada de recordatorios** corriendo cada pocos minutos (ver
+  arriba); sin ella solo sale la confirmación al agendar.
+- **Verificación de la app de Google.** Mientras la pantalla de consentimiento
+  esté "en prueba", solo las cuentas agregadas como usuarios de prueba pueden
+  conectar su calendario.
 - **Facturación electrónica (FEL).** El comprobante de venta es interno; no
   sustituye a la factura autorizada por la SAT.

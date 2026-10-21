@@ -16,6 +16,7 @@ import {
   quetzales,
   tiempoRelativo,
 } from "@/lib/gt";
+import { ESTADOS_CITA } from "@/lib/citas";
 import { FormularioNota } from "./nota";
 import { agregarNota } from "../acciones";
 
@@ -67,6 +68,11 @@ export default async function PaginaContacto({
         include: { usuario: { select: { nombre: true } } },
       },
       cotizaciones: { orderBy: { creadoEl: "desc" }, take: 10 },
+      citas: {
+        orderBy: { inicio: "desc" },
+        take: 10,
+        include: { profesional: { select: { nombre: true } } },
+      },
     },
   });
 
@@ -108,6 +114,9 @@ export default async function PaginaContacto({
             contactoId={contacto.id}
             resumen="Le escribiste por WhatsApp desde su ficha"
           />
+          <BotonEnlace href={`/app/citas/nueva?paciente=${contacto.id}`}>
+            <Icono nombre="calendario" /> Agendar cita
+          </BotonEnlace>
           <BotonEnlace
             href={`/app/cotizaciones/nueva?contacto=${contacto.id}`}
             variante="secundario"
@@ -122,6 +131,43 @@ export default async function PaginaContacto({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
+          <Tarjeta className="p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-tinta-900">Citas</h2>
+              <Link
+                href={`/app/citas/nueva?paciente=${contacto.id}`}
+                className="text-sm text-marca-600 hover:underline"
+              >
+                Agendar
+              </Link>
+            </div>
+            {contacto.citas.length === 0 ? (
+              <p className="text-sm text-tinta-500">Sin citas registradas.</p>
+            ) : (
+              <ul className="divide-y divide-tinta-100">
+                {contacto.citas.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/app/citas/${c.id}`}
+                        className="truncate text-sm font-medium text-tinta-800 hover:text-marca-600"
+                      >
+                        {fechaHora(c.inicio)}
+                      </Link>
+                      <p className="truncate text-xs text-tinta-500">
+                        {c.motivo}
+                        {c.profesional && ` · ${c.profesional.nombre}`}
+                      </p>
+                    </div>
+                    <Insignia tono={ESTADOS_CITA[c.estado].tono}>
+                      {ESTADOS_CITA[c.estado].texto}
+                    </Insignia>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Tarjeta>
+
           <Tarjeta className="p-5">
             <h2 className="mb-3 text-sm font-semibold text-tinta-900">Oportunidades</h2>
             {contacto.oportunidades.length === 0 ? (
