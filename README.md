@@ -219,6 +219,7 @@ momento.
 | `npm start` | Sirve la compilación de producción. |
 | `npm run typecheck` | Revisa tipos sin compilar. |
 | `npm run db:migrate` | Crea y aplica migraciones en desarrollo. |
+| `npm run db:deploy` | Aplica las migraciones pendientes en producción (usa `DIRECT_URL` si existe). |
 | `npm run db:seed` | Carga los datos de demostración. |
 | `npm run db:studio` | Abre Prisma Studio. |
 
@@ -260,6 +261,12 @@ Cada consulta y cada mutación filtra por `empresaId` tomado de la sesión, nunc
 del formulario. Las actualizaciones usan `updateMany` con `where: { id, empresaId }`
 para que un id de otra empresa no afecte nada. Está verificado con dos cuentas
 distintas: la segunda no ve ni un solo registro de la primera.
+
+## Publicar
+
+La guía paso a paso para dejarlo en línea con Vercel y Supabase, conectar
+Google Calendar y WhatsApp y activar los recordatorios está en
+[`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
 
 ## Antes de salir a producción
 
