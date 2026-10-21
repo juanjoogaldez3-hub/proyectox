@@ -250,14 +250,18 @@ export function BarrasRanking({
   filas,
   etiquetaCantidad,
   vacio,
+  enQuetzales = true,
 }: {
   titulo: string;
   descripcion?: string;
   filas: { id: string; nombre: string; total: number; cantidad: number }[];
   etiquetaCantidad: string;
   vacio: string;
+  // false para rankings que cuentan cosas (citas) en vez de dinero.
+  enQuetzales?: boolean;
 }) {
   const maximo = Math.max(...filas.map((f) => f.total), 0);
+  const formato = (v: number) => (enQuetzales ? quetzales(v) : numero(v).replace(".00", ""));
 
   return (
     <Tarjeta className="viz p-5">
@@ -274,7 +278,7 @@ export function BarrasRanking({
                 <div className="flex items-baseline justify-between gap-3 text-sm">
                   <span className="min-w-0 truncate text-tinta-700">{f.nombre}</span>
                   <span className="shrink-0 font-medium tabular-nums text-tinta-900">
-                    {quetzales(f.total)}
+                    {formato(f.total)}
                   </span>
                 </div>
                 <div
@@ -284,7 +288,7 @@ export function BarrasRanking({
                   <div
                     tabIndex={0}
                     role="img"
-                    aria-label={`${f.nombre}: ${quetzales(f.total)}`}
+                    aria-label={`${f.nombre}: ${formato(f.total)}`}
                     className="h-full rounded-full"
                     style={{
                       width: `${maximo > 0 ? Math.max((f.total / maximo) * 100, 2) : 0}%`,
@@ -293,7 +297,7 @@ export function BarrasRanking({
                   />
                 </div>
                 <Globo>
-                  {f.nombre}: {quetzales(f.total)} · {numero(f.cantidad).replace(".00", "")}{" "}
+                  {f.nombre}: {formato(f.total)} · {numero(f.cantidad).replace(".00", "")}{" "}
                   {etiquetaCantidad}
                 </Globo>
               </li>
@@ -305,7 +309,7 @@ export function BarrasRanking({
             filas={filas.map((f) => [
               f.nombre,
               numero(f.cantidad).replace(".00", ""),
-              quetzales(f.total),
+              formato(f.total),
             ])}
           />
         </>

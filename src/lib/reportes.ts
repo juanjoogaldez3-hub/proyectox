@@ -228,3 +228,106 @@ export async function resumenDelRango(
     oportunidadesPerdidas: conteo(cerradas, ["PERDIDA"]),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Clínicas
+// ---------------------------------------------------------------------------
+
+/** Lo cobrado por consultas, agrupado por el profesional que atendió. */
+export async function ingresosPorProfesional(empresaId: string, rango: Rango): Promise<FilaRanking[]> {
+  const desde = inicioDelRango(rango);
+  const filas = await prisma.$queryRaw<
+    { id: string | null; nombre: string | null; total: number; consultas: bigint }[]
+  >`
+    SELECT p."id"                 AS id,
+           p."nombre"             AS nombre,
+           SUM(v."total")::float8 AS total,
+           COUNT(*)::bigint       AS consultas
+    FROM "Cita" c
+    JOIN "Venta" v ON v."id" = c."ventaId"
+    LEFT JOIN "Profesional" p ON p."id" = c."profesionalId"
+    WHERE c."empresaId" = ${empresaId}
+      AND v."estado" <> 'ANULADA'
+      AND v."fecha" >= ${desde}
+    GROUP BY 1, 2
+    ORDER BY 3 DESC
+  `;
+  return filas.map((f) => ({
+    id: f.id ?? "sin-profesional",
+    nombre: f.nombre ?? "Sin profesional asignado",
+    total: redondear(f.total ?? 0),
+    cantidad: Number(f.consultas),
+  }));
+}
+
+export type AsistenciaProfesional = {
+  id: string;
+  nombre: string;
+  atendidas: number;
+  faltas: number;
+  canceladas: number;
+};
+
+/** Citas ya pasadas por profesional: cuántas se atendieron y cuántas no. */
+export async function asistenciaPorProfesional(empresaId: string, rango: Rango): Promise<AsistenciaProfesional[]> {
+  const desde = inicioDelRango(rango);
+  const grupos = await prisma.cita.groupBy({
+    by: ["profesionalId", "estado"],
+    where: { empresaId, inicio: { gte: desde, lt: new Date() } },
+    _count: true,
+  });
+  const profesionales = await prisma.profesional.findMany({
+    where: { empresaId },
+    select: { id: true, nombre: true },
+  });
+  const nombre = new Map(profesionales.map((p) => [p.id, p.nombre]));
+  const filas = new Map<string, AsistenciaProfesional>();
+  for (const g of grupos) {
+    const id = g.profesionalId ?? "sin-profesional";
+    const fila =
+      filas.get(id) ??
+      ({ id, nombre: nombre.get(id) ?? "Sin profesional asignado", atendidas: 0, faltas: 0, canceladas: 0 } as AsistenciaProfesional);
+    if (g.estado === "COMPLETADA") fila.atendidas += g._count;
+    if (g.estado === "NO_ASISTIO") fila.faltas += g._count;
+    if (g.estado === "CANCELADA") fila.canceladas += g._count;
+    filas.set(id, fila);
+  }
+  return [...filas.values()].sort((a, b) => b.atendidas - a.atendidas);
+}
+
+/** Citas por servicio, para ver qué se pide más. */
+export async function citasPorServicio(empresaId: string, rango: Rango): Promise<FilaRanking[]> {
+  const desde = inicioDelRango(rango);
+  const grupos = await prisma.cita.groupBy({
+    by: ["tipoConsultaId"],
+    where: { empresaId, inicio: { gte: desde }, estado: { not: "CANCELADA" } },
+    _count: true,
+  });
+  const tipos = await prisma.tipoConsulta.findMany({ where: { empresaId }, select: { id: true, nombre: true } });
+  const nombre = new Map(tipos.map((t) => [t.id, t.nombre]));
+  return grupos
+    .map((g) => ({
+      id: g.tipoConsultaId ?? "sin-servicio",
+      nombre: g.tipoConsultaId ? (nombre.get(g.tipoConsultaId) ?? "Servicio") : "Sin servicio",
+      total: g._count,
+      cantidad: g._count,
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
+export async function resumenClinica(empresaId: string, rango: Rango) {
+  const desde = inicioDelRango(rango);
+  const [enLinea, calificaciones] = await Promise.all([
+    prisma.cita.count({ where: { empresaId, origen: "EN_LINEA", creadoEl: { gte: desde } } }),
+    prisma.cita.aggregate({
+      where: { empresaId, inicio: { gte: desde }, calificacion: { not: null } },
+      _avg: { calificacion: true },
+      _count: { calificacion: true },
+    }),
+  ]);
+  return {
+    reservasEnLinea: enLinea,
+    calificacionPromedio: calificaciones._avg.calificacion,
+    calificaciones: calificaciones._count.calificacion,
+  };
+}
