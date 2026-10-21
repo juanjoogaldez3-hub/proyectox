@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { cifrar, descifrar } from "@/lib/cifrado";
-import { ZONA_GT, mostrarTelefono } from "@/lib/gt";
+import { ZONA_GT, instanteGT, mostrarTelefono } from "@/lib/gt";
 import { enlacePublicoCita, urlBase } from "@/lib/citas";
 
 /**
@@ -232,6 +232,62 @@ export async function listarCalendarios(empresaId: string): Promise<CalendarioGo
     nombre: c.summaryOverride ?? c.summary,
     principal: Boolean(c.primary),
   }));
+}
+
+/**
+ * Lo que el profesional tiene ocupado en su Google Calendar y que no salió de
+ * esta agenda: una reunión, un congreso, un rato que se bloqueó a mano. Si
+ * Google falla devuelve una lista vacía: la agenda sigue funcionando con lo
+ * que sabe.
+ */
+export async function ocupadoEnGoogle(
+  empresaId: string,
+  calendarioProfesional: string | null,
+  desde: Date,
+  hasta: Date,
+): Promise<{ inicio: Date; fin: Date; titulo: string }[]> {
+  try {
+    const acceso = await tokenDeAcceso(empresaId);
+    if (!acceso) return [];
+    const calendarioId = calendarioProfesional || acceso.calendarioId;
+    const params = new URLSearchParams({
+      timeMin: desde.toISOString(),
+      timeMax: hasta.toISOString(),
+      singleEvents: "true",
+      maxResults: "250",
+      fields: "items(status,transparency,summary,start,end,extendedProperties)",
+    });
+    const datos = await llamarCalendario<{
+      items?: {
+        status?: string;
+        transparency?: string;
+        summary?: string;
+        start?: { dateTime?: string; date?: string };
+        end?: { dateTime?: string; date?: string };
+        extendedProperties?: { private?: Record<string, string> };
+      }[];
+    }>(acceso.token, `${rutaEvento(calendarioId)}?${params.toString()}`);
+
+    return (datos?.items ?? [])
+      .filter(
+        (e) =>
+          e.status !== "cancelled" &&
+          e.transparency !== "transparent" &&
+          !e.extendedProperties?.private?.crmCitaId,
+      )
+      .map((e) => {
+        // Un evento de todo el día ocupa el día completo en Guatemala.
+        const inicio = e.start?.dateTime
+          ? new Date(e.start.dateTime)
+          : instanteGT(e.start?.date ?? "", "00:00");
+        const fin = e.end?.dateTime ? new Date(e.end.dateTime) : instanteGT(e.end?.date ?? "", "00:00");
+        return inicio && fin ? { inicio, fin, titulo: e.summary ?? "Ocupado en Google Calendar" } : null;
+      })
+      .filter((e): e is { inicio: Date; fin: Date; titulo: string } => e !== null);
+  } catch (e) {
+    console.error("Google Calendar (ocupado):", e instanceof Error ? e.message : e);
+    return [];
+  }
 }
 
 type EventoGoogle = { id: string; htmlLink?: string };

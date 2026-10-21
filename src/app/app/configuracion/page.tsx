@@ -3,16 +3,17 @@ import { requerirSesion } from "@/lib/auth";
 import { Aviso } from "@/components/ui";
 import { aNumero } from "@/lib/gt";
 import { FormularioEmpresa, FormularioPassword } from "./formularios";
+import { esAdmin } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Configuración" };
 
 export default async function PaginaConfiguracion() {
   const { empresa, usuario } = await requerirSesion();
-  const esAdmin = usuario.rol !== "VENDEDOR";
+  const puedeAdministrar = esAdmin(usuario.rol);
 
   return (
     <div className="space-y-6">
-      {esAdmin ? (
+      {puedeAdministrar ? (
         <FormularioEmpresa
           valores={{
             nombre: empresa.nombre,
@@ -22,6 +23,7 @@ export default async function PaginaConfiguracion() {
             departamento: empresa.departamento,
             municipio: empresa.municipio,
             ivaPorcentaje: aNumero(empresa.ivaPorcentaje),
+            giro: empresa.giro,
           }}
         />
       ) : (

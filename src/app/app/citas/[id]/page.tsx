@@ -25,6 +25,7 @@ const TIPO_RECORDATORIO: Record<TipoRecordatorio, string> = {
   CONFIRMACION: "Confirmación",
   PRIMERO: "Primer recordatorio",
   SEGUNDO: "Segundo recordatorio",
+  SEGUIMIENTO: "Aviso de control",
 };
 
 const ESTADO_RECORDATORIO: Record<

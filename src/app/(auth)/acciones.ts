@@ -16,6 +16,7 @@ const esquemaRegistro = z.object({
   email: z.string().trim().toLowerCase().email("Ese correo no parece válido."),
   telefono: z.string().trim().optional(),
   password: z.string().min(8, "La contraseña necesita al menos 8 caracteres."),
+  giro: z.enum(["GENERAL", "CLINICA"]).default("GENERAL"),
 });
 
 function generarSlug(texto: string): string {
@@ -49,6 +50,7 @@ export async function registrar(
     email: datos.get("email"),
     telefono: datos.get("telefono"),
     password: datos.get("password"),
+    giro: (datos.get("giro") as string) || "GENERAL",
   });
   if (!parseado.success) {
     return { error: parseado.error.issues[0].message };
@@ -72,6 +74,7 @@ export async function registrar(
         telefono: normalizarTelefono(entrada.telefono),
         estadoSuscripcion: "PRUEBA",
         pruebaTermina,
+        giro: entrada.giro,
         // Cada empresa arranca con un embudo usable en lugar de una pantalla vacía.
         etapas: { create: ETAPAS_INICIALES },
       },

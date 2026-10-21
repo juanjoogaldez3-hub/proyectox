@@ -8,6 +8,7 @@ import { Icono } from "@/components/iconos";
 import { BotonImprimir } from "@/components/imprimir";
 import { aNumero, fecha, mostrarNit, mostrarTelefono, numero, quetzales } from "@/lib/gt";
 import { AccionesVenta } from "./acciones-venta";
+import { esAdmin } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Venta" };
 
@@ -56,7 +57,7 @@ export default async function PaginaVenta({ params }: { params: Promise<{ id: st
         <AccionesVenta
           id={venta.id}
           estado={venta.estado}
-          puedeAnular={usuario.rol !== "VENDEDOR"}
+          puedeAnular={esAdmin(usuario.rol)}
         />
 
         {venta.cotizacion && (

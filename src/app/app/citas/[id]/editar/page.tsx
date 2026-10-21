@@ -42,6 +42,7 @@ export default async function PaginaEditarCita({ params }: { params: Promise<{ i
           motivo: cita.motivo,
           notas: cita.notas,
           invitarPaciente: cita.invitarPaciente,
+          tipoConsultaId: cita.tipoConsultaId,
         }}
       />
     </div>

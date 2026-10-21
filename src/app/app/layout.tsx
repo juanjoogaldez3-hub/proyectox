@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requerirSesion } from "@/lib/auth";
-import { NavegacionLateral, NavegacionMovil } from "@/components/navegacion";
+import { NavegacionLateral, NavegacionMovil, type MenuApp } from "@/components/navegacion";
 import { Icono } from "@/components/iconos";
 import { Instalar } from "@/components/instalar";
 import { PLANES, diasRestantesDePrueba, diasRestantesHasta } from "@/lib/planes";
@@ -20,16 +20,18 @@ export default async function LayoutApp({ children }: { children: React.ReactNod
   // Distinguimos "se acabó la prueba" de "se venció lo que pagaste": el mensaje
   // y lo que tiene que hacer el usuario son distintos.
   const nuncaPago = empresa.planRenuevaEl === null;
+  const menu: MenuApp =
+    usuario.rol === "MEDICO" ? "MEDICO" : empresa.giro === "CLINICA" ? "CLINICA" : "GENERAL";
 
   return (
     <div className="flex min-h-screen bg-tinta-50">
-      <NavegacionLateral />
+      <NavegacionLateral menu={menu} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Instalar />
         <header className="no-imprimir relative flex items-center justify-between gap-3 border-b border-tinta-200 bg-white px-4 py-2.5">
           <div className="flex items-center gap-3">
-            <NavegacionMovil />
+            <NavegacionMovil menu={menu} />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-tinta-900">{empresa.nombre}</p>
               <p className="text-xs text-tinta-500">

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 /** Lo que necesita el formulario de cita, compartido entre crear y editar. */
 export async function datosFormularioCita(empresaId: string) {
-  const [pacientes, profesionales, google, whatsapp] = await Promise.all([
+  const [pacientes, profesionales, google, whatsapp, tipos] = await Promise.all([
     prisma.contacto.findMany({
       where: { empresaId },
       select: { id: true, nombre: true, whatsapp: true, email: true },
@@ -18,11 +18,17 @@ export async function datosFormularioCita(empresaId: string) {
     }),
     prisma.integracionGoogle.findUnique({ where: { empresaId }, select: { error: true } }),
     prisma.integracionWhatsApp.findUnique({ where: { empresaId }, select: { activa: true } }),
+    prisma.tipoConsulta.findMany({
+      where: { empresaId, activo: true },
+      select: { id: true, nombre: true, duracionMin: true, profesionalIds: true },
+      orderBy: { nombre: "asc" },
+    }),
   ]);
 
   return {
     pacientes,
     profesionales,
+    tipos,
     googleConectado: Boolean(google && !google.error),
     whatsappConectado: Boolean(whatsapp?.activa),
   };

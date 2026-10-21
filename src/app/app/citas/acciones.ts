@@ -9,8 +9,9 @@ import { prisma } from "@/lib/prisma";
 import { requerirSesion } from "@/lib/auth";
 import { verificarLimite } from "@/lib/limites";
 import { comoError, textoOpcional, type EstadoAccion } from "@/lib/acciones";
-import { instanteGT } from "@/lib/gt";
-import { citaVigente, rangoHoras } from "@/lib/citas";
+import { instanteGT, partesLocalesGT } from "@/lib/gt";
+import { citaVigente } from "@/lib/citas";
+import { espaciosDisponibles, problemaDeHorario } from "@/lib/espacios";
 import { sincronizarCitaConGoogle } from "@/lib/google";
 import {
   anotarEnHistorial,
@@ -33,6 +34,8 @@ const esquema = z.object({
   notas: textoOpcional,
   invitarPaciente: z.boolean(),
   avisarAhora: z.boolean(),
+  sobreturno: z.boolean(),
+  tipoConsultaId: textoOpcional,
 });
 
 function leerFormulario(datos: FormData) {
@@ -46,12 +49,15 @@ function leerFormulario(datos: FormData) {
     notas: datos.get("notas") ?? "",
     invitarPaciente: datos.get("invitarPaciente") === "on",
     avisarAhora: datos.get("avisarAhora") === "on",
+    sobreturno: datos.get("sobreturno") === "on",
+    tipoConsultaId: datos.get("tipoConsultaId") ?? "",
   });
 }
 
 /**
  * Valida lo relacionado con la cita (que todo sea de esta empresa) y que el
- * profesional no tenga otra cita encima. Devuelve el rango ya calculado.
+ * profesional esté libre: dentro de su horario, sin otra cita, sin bloqueo y
+ * sin nada en su Google Calendar. Con "sobreturno" la recepción agenda igual.
  */
 async function validarCita(
   empresaId: string,
@@ -68,28 +74,24 @@ async function validarCita(
   });
   if (!contacto) throw new Error("No encontramos a ese paciente.");
 
-  if (entrada.profesionalId) {
-    const profesional = await prisma.profesional.findFirst({
-      where: { id: entrada.profesionalId, empresaId },
-      select: { id: true, nombre: true },
+  if (entrada.tipoConsultaId) {
+    const tipo = await prisma.tipoConsulta.findFirst({
+      where: { id: entrada.tipoConsultaId, empresaId },
+      select: { id: true },
     });
-    if (!profesional) throw new Error("No encontramos a ese profesional.");
+    if (!tipo) throw new Error("No encontramos ese servicio.");
+  }
 
-    const choque = await prisma.cita.findFirst({
-      where: {
-        empresaId,
-        profesionalId: profesional.id,
-        estado: { in: ["PROGRAMADA", "CONFIRMADA"] },
-        inicio: { lt: fin },
-        fin: { gt: inicio },
-        ...(excluirId ? { id: { not: excluirId } } : {}),
-      },
-      select: { inicio: true, fin: true, contacto: { select: { nombre: true } } },
+  if (entrada.profesionalId) {
+    const problema = await problemaDeHorario({
+      empresaId,
+      profesionalId: entrada.profesionalId,
+      inicio,
+      fin,
+      excluirCitaId: excluirId,
     });
-    if (choque) {
-      throw new Error(
-        `${profesional.nombre} ya tiene cita de ${rangoHoras(choque.inicio, choque.fin)} con ${choque.contacto.nombre}.`,
-      );
+    if (problema && !entrada.sobreturno) {
+      throw new Error(`${problema} Si igual querés agendarla, marcá “Sobreturno”.`);
     }
   }
 
@@ -136,6 +138,7 @@ export async function crearCita(_estado: EstadoAccion, datos: FormData): Promise
         motivo: entrada.motivo,
         notas: entrada.notas ?? null,
         invitarPaciente: entrada.invitarPaciente,
+        tipoConsultaId: entrada.tipoConsultaId ?? null,
         tokenPublico: randomBytes(18).toString("base64url"),
         creadaPorId: usuario.id,
       },
@@ -178,6 +181,7 @@ export async function actualizarCita(
         motivo: entrada.motivo,
         notas: entrada.notas ?? null,
         invitarPaciente: entrada.invitarPaciente,
+        tipoConsultaId: entrada.tipoConsultaId ?? null,
         // Si se movió de hora, la confirmación anterior ya no vale.
         ...(cambioHora
           ? { estado: "PROGRAMADA" as const, confirmadaEl: null, confirmadaPor: null }
@@ -305,4 +309,21 @@ export async function reintentarGoogle(id: string): Promise<void> {
   if (!cita) return;
   await sincronizarCitaConGoogle(cita.id);
   revalidatePath(`/app/citas/${cita.id}`);
+}
+
+/** Horas libres para el formulario: la recepción toca una y queda puesta. */
+export async function buscarEspacios(
+  profesionalId: string,
+  fecha: string,
+  duracionMin: number,
+): Promise<string[]> {
+  const { empresa } = await requerirSesion();
+  if (!profesionalId || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return [];
+  const espacios = await espaciosDisponibles({
+    empresaId: empresa.id,
+    profesionalId,
+    fecha,
+    duracionMin: Math.min(600, Math.max(5, Math.trunc(duracionMin) || 30)),
+  });
+  return espacios.map((e) => partesLocalesGT(e).hora);
 }
