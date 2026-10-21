@@ -523,3 +523,112 @@ export async function eliminarBloqueo(id: string): Promise<void> {
   revalidatePath("/app/configuracion/profesionales");
   revalidatePath("/app/citas");
 }
+
+// --- Servicios (tipos de consulta) y reservas en línea -----------------------
+
+const esquemaServicio = z.object({
+  nombre: z.string().trim().min(2, "Escribí el nombre del servicio."),
+  duracionMin: numeroDeFormulario.transform((v) => Math.min(600, Math.max(5, Math.trunc(v) || 30))),
+  precio: numeroDeFormulario.refine((v) => v >= 0, "El precio no puede ser negativo."),
+  reservable: z.boolean(),
+  profesionalIds: z.array(z.string()),
+});
+
+function leerServicio(datos: FormData) {
+  return esquemaServicio.parse({
+    nombre: datos.get("nombre") ?? "",
+    duracionMin: (datos.get("duracionMin") as string) || "30",
+    precio: (datos.get("precio") as string) || "0",
+    reservable: datos.get("reservable") === "on",
+    profesionalIds: datos.getAll("profesionalIds").map(String).filter(Boolean),
+  });
+}
+
+async function profesionalesDeLaEmpresa(empresaId: string, ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const validos = await prisma.profesional.findMany({
+    where: { empresaId, id: { in: ids } },
+    select: { id: true },
+  });
+  return validos.map((p) => p.id);
+}
+
+export async function crearServicio(_estado: EstadoAccion, datos: FormData): Promise<EstadoAccion> {
+  try {
+    const { empresa } = await requerirAdmin();
+    const entrada = leerServicio(datos);
+    await prisma.tipoConsulta.create({
+      data: {
+        empresaId: empresa.id,
+        nombre: entrada.nombre,
+        duracionMin: entrada.duracionMin,
+        precio: entrada.precio,
+        reservable: entrada.reservable,
+        profesionalIds: await profesionalesDeLaEmpresa(empresa.id, entrada.profesionalIds),
+      },
+    });
+  } catch (e) {
+    return comoError(e);
+  }
+  revalidatePath("/app/configuracion/servicios");
+  return { ok: true };
+}
+
+export async function actualizarServicio(
+  id: string,
+  _estado: EstadoAccion,
+  datos: FormData,
+): Promise<EstadoAccion> {
+  try {
+    const { empresa } = await requerirAdmin();
+    const entrada = leerServicio(datos);
+    const { count } = await prisma.tipoConsulta.updateMany({
+      where: { id, empresaId: empresa.id },
+      data: {
+        nombre: entrada.nombre,
+        duracionMin: entrada.duracionMin,
+        precio: entrada.precio,
+        reservable: entrada.reservable,
+        profesionalIds: await profesionalesDeLaEmpresa(empresa.id, entrada.profesionalIds),
+      },
+    });
+    if (count === 0) return { error: "No encontramos ese servicio." };
+  } catch (e) {
+    return comoError(e);
+  }
+  revalidatePath("/app/configuracion/servicios");
+  return { ok: true };
+}
+
+export async function alternarServicio(id: string): Promise<void> {
+  const { empresa } = await requerirAdmin();
+  const servicio = await prisma.tipoConsulta.findFirst({
+    where: { id, empresaId: empresa.id },
+    select: { id: true, activo: true },
+  });
+  if (!servicio) return;
+  await prisma.tipoConsulta.update({ where: { id: servicio.id }, data: { activo: !servicio.activo } });
+  revalidatePath("/app/configuracion/servicios");
+}
+
+const esquemaReservas = z.object({
+  reservasActivas: z.boolean(),
+  reservasAnticipacionHoras: numeroDeFormulario.transform((v) => Math.min(168, Math.max(0, Math.trunc(v)))),
+  reservasDiasMax: numeroDeFormulario.transform((v) => Math.min(180, Math.max(1, Math.trunc(v) || 30))),
+});
+
+export async function guardarReservas(_estado: EstadoAccion, datos: FormData): Promise<EstadoAccion> {
+  try {
+    const { empresa } = await requerirAdmin();
+    const entrada = esquemaReservas.parse({
+      reservasActivas: datos.get("reservasActivas") === "on",
+      reservasAnticipacionHoras: (datos.get("reservasAnticipacionHoras") as string) || "2",
+      reservasDiasMax: (datos.get("reservasDiasMax") as string) || "30",
+    });
+    await prisma.empresa.update({ where: { id: empresa.id }, data: entrada });
+  } catch (e) {
+    return comoError(e);
+  }
+  revalidatePath("/app/configuracion/servicios");
+  return { ok: true };
+}

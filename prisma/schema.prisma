@@ -685,6 +685,8 @@ model Recordatorio {
   // wamid que devuelve la API de WhatsApp; con el se emparejan los avisos de
   // entregado y leido que llegan al webhook.
   mensajeId      String?            @unique
+  // Para el aviso de control: qué le toca ("Control de presión").
+  nota           String?
   error          String?
   creadoEl       DateTime           @default(now())
   actualizadoEl  DateTime           @updatedAt

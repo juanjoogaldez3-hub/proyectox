@@ -39,6 +39,9 @@ ADD COLUMN     "reservasDiasMax" INTEGER NOT NULL DEFAULT 30;
 ALTER TABLE "IntegracionWhatsApp" ADD COLUMN     "plantillaSeguimiento" TEXT;
 
 -- AlterTable
+ALTER TABLE "Recordatorio" ADD COLUMN     "nota" TEXT;
+
+-- AlterTable
 ALTER TABLE "Usuario" ADD COLUMN     "profesionalId" TEXT;
 
 -- CreateTable

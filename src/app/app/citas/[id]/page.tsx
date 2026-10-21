@@ -16,8 +16,16 @@ import {
   mensajeRecordatorio,
   rangoHoras,
 } from "@/lib/citas";
-import { reintentarGoogle } from "../acciones";
-import { AccionesCita, BotonEnviarRecordatorio, EnlacePaciente } from "./acciones-cita";
+import { programarControl, registrarCobro, reintentarGoogle } from "../acciones";
+import {
+  AccionesCita,
+  BotonEnviarRecordatorio,
+  EnlacePaciente,
+  FormularioCobro,
+  FormularioControl,
+} from "./acciones-cita";
+import { puedeVerExpediente } from "@/lib/roles";
+import { aNumero, quetzales } from "@/lib/gt";
 
 export const metadata: Metadata = { title: "Cita" };
 
@@ -67,6 +75,8 @@ export default async function PaginaCita({ params }: { params: Promise<{ id: str
       profesional: { select: { nombre: true, especialidad: true, color: true } },
       creadaPor: { select: { nombre: true } },
       recordatorios: { orderBy: { programadoPara: "asc" } },
+      tipoConsulta: { select: { nombre: true, precio: true } },
+      venta: { select: { id: true, numero: true, total: true, metodoPago: true, estado: true } },
     },
   });
   if (!cita) notFound();
@@ -212,6 +222,67 @@ export default async function PaginaCita({ params }: { params: Promise<{ id: str
         </div>
 
         <div className="space-y-4">
+          {cita.estado !== "CANCELADA" && usuario.rol !== "MEDICO" && (
+            <Tarjeta className="p-5">
+              <h2 className="mb-3 text-sm font-semibold text-tinta-900">Cobro de la consulta</h2>
+              {cita.venta ? (
+                <p className="text-sm text-tinta-700">
+                  <Link href={`/app/ventas/${cita.venta.id}`} className="font-medium text-marca-600 hover:underline">
+                    Cobro #{cita.venta.numero}
+                  </Link>{" "}
+                  · {quetzales(aNumero(cita.venta.total))} · {cita.venta.metodoPago}
+                  {cita.venta.estado === "ANULADA" && <span className="text-red-600"> · anulado</span>}
+                </p>
+              ) : (
+                <FormularioCobro
+                  accion={registrarCobro.bind(null, cita.id)}
+                  montoSugerido={cita.tipoConsulta ? aNumero(cita.tipoConsulta.precio) || null : null}
+                />
+              )}
+            </Tarjeta>
+          )}
+
+          {cita.estado === "COMPLETADA" && (
+            <Tarjeta className="p-5">
+              <h2 className="mb-1 text-sm font-semibold text-tinta-900">Próximo control</h2>
+              {(() => {
+                const control = cita.recordatorios.find((r) => r.tipo === "SEGUIMIENTO" && r.estado !== "CANCELADO");
+                return control ? (
+                  <p className="mb-3 text-sm text-tinta-600">
+                    Aviso programado para el {fechaHora(control.programadoPara)}
+                    {control.nota && `: ${control.nota}`}.
+                  </p>
+                ) : (
+                  <p className="mb-3 text-xs text-tinta-500">
+                    Le llega un WhatsApp para que vuelva a agendar y queda una tarea para la recepción.
+                  </p>
+                );
+              })()}
+              <FormularioControl accion={programarControl.bind(null, cita.id)} sugerencia={`control de ${cita.motivo.toLowerCase()}`} />
+            </Tarjeta>
+          )}
+
+          {puedeVerExpediente(usuario.rol) && cita.estado !== "CANCELADA" && (
+            <Tarjeta className="p-5">
+              <h2 className="mb-1 text-sm font-semibold text-tinta-900">Expediente</h2>
+              <p className="mb-2 text-xs text-tinta-500">Notas de la consulta, diagnóstico y receta.</p>
+              <BotonEnlace href={`/app/pacientes/${cita.contacto.id}?cita=${cita.id}`} variante="secundario" tamano="sm">
+                Escribir nota de esta consulta
+              </BotonEnlace>
+            </Tarjeta>
+          )}
+
+          {cita.calificacion && (
+            <Tarjeta className="p-5">
+              <h2 className="mb-1 text-sm font-semibold text-tinta-900">Opinión del paciente</h2>
+              <p className="text-amber-500">
+                {"★".repeat(cita.calificacion)}
+                <span className="text-tinta-300">{"★".repeat(5 - cita.calificacion)}</span>
+              </p>
+              {cita.comentarioPaciente && <p className="mt-1 text-sm text-tinta-700">“{cita.comentarioPaciente}”</p>}
+            </Tarjeta>
+          )}
+
           <Tarjeta className="p-5">
             <h2 className="mb-3 text-sm font-semibold text-tinta-900">Detalle</h2>
             <dl className="space-y-3">

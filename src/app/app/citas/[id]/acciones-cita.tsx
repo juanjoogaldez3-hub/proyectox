@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import type { EstadoCita } from "@prisma/client";
 import { Aviso, Boton, Tarjeta } from "@/components/ui";
 import { Icono } from "@/components/iconos";
+import { useAccionFormulario } from "@/components/accion-formulario";
 import type { EstadoAccion } from "@/lib/acciones";
 import { cambiarEstadoCita, enviarRecordatorioAhora } from "../acciones";
 
@@ -132,5 +133,88 @@ export function EnlacePaciente({ enlace, enlaceGoogle }: { enlace: string; enlac
         Abrir como evento de Google Calendar
       </a>
     </div>
+  );
+}
+
+export function FormularioCobro({
+  accion,
+  montoSugerido,
+}: {
+  accion: (estado: EstadoAccion, datos: FormData) => Promise<EstadoAccion>;
+  montoSugerido: number | null;
+}) {
+  const { estado, alEnviar, pendiente } = useAccionFormulario(accion);
+  return (
+    <form onSubmit={alEnviar} className="space-y-3">
+      {estado?.error && <Aviso tono="peligro">{estado.error}</Aviso>}
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="etiqueta-campo">Monto (Q)</span>
+          <input
+            name="monto"
+            type="number"
+            min="0"
+            step="0.01"
+            required
+            defaultValue={montoSugerido ?? ""}
+            className="campo"
+          />
+        </label>
+        <label className="block">
+          <span className="etiqueta-campo">Pagó con</span>
+          <select name="metodoPago" defaultValue="Efectivo" className="campo">
+            <option>Efectivo</option>
+            <option>Tarjeta</option>
+            <option>Transferencia</option>
+            <option>Depósito</option>
+            <option>Seguro</option>
+          </select>
+        </label>
+      </div>
+      <label className="block">
+        <span className="etiqueta-campo">NIT para la factura</span>
+        <input name="nitCliente" className="campo" placeholder="CF" />
+      </label>
+      <Boton type="submit" tamano="sm" disabled={pendiente}>
+        {pendiente ? "Registrando…" : "Registrar cobro"}
+      </Boton>
+    </form>
+  );
+}
+
+export function FormularioControl({
+  accion,
+  sugerencia,
+}: {
+  accion: (estado: EstadoAccion, datos: FormData) => Promise<EstadoAccion>;
+  sugerencia: string;
+}) {
+  const { estado, alEnviar, pendiente } = useAccionFormulario(accion);
+  return (
+    <form onSubmit={alEnviar} className="space-y-3">
+      {estado?.error && <Aviso tono="peligro">{estado.error}</Aviso>}
+      {estado?.ok && <Aviso tono="exito">Listo. Ese día le llega el aviso y queda una tarea para llamarle.</Aviso>}
+      <div className="flex items-end gap-2">
+        <label className="block w-20">
+          <span className="etiqueta-campo">En</span>
+          <input name="cantidad" type="number" min="1" max="36" defaultValue={3} className="campo" />
+        </label>
+        <label className="block flex-1">
+          <span className="sr-only">Unidad</span>
+          <select name="unidad" defaultValue="meses" className="campo">
+            <option value="dias">días</option>
+            <option value="semanas">semanas</option>
+            <option value="meses">meses</option>
+          </select>
+        </label>
+      </div>
+      <label className="block">
+        <span className="etiqueta-campo">¿Qué le toca?</span>
+        <input name="nota" required defaultValue={sugerencia} className="campo" />
+      </label>
+      <Boton type="submit" tamano="sm" variante="secundario" disabled={pendiente}>
+        {pendiente ? "Guardando…" : "Programar aviso"}
+      </Boton>
+    </form>
   );
 }

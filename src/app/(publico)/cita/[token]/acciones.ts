@@ -48,3 +48,30 @@ export async function cancelarDesdeEnlace(
   revalidatePath(`/cita/${token}`);
   return { ok: true };
 }
+
+/** Después de la consulta, el paciente califica la atención desde el mismo enlace. */
+export async function calificarDesdeEnlace(
+  token: string,
+  _estado: EstadoAccion,
+  datos: FormData,
+): Promise<EstadoAccion> {
+  try {
+    const calificacion = Math.trunc(Number(datos.get("calificacion")));
+    if (!(calificacion >= 1 && calificacion <= 5)) return { error: "Elija de 1 a 5 estrellas." };
+    const comentario = ((datos.get("comentario") as string) ?? "").trim().slice(0, 500);
+    const cita = await prisma.cita.findUnique({
+      where: { tokenPublico: token },
+      select: { id: true, estado: true, calificacion: true },
+    });
+    if (!cita || cita.estado !== "COMPLETADA") return { error: "Esta cita todavía no se puede calificar." };
+    if (cita.calificacion) return { ok: true };
+    await prisma.cita.update({
+      where: { id: cita.id },
+      data: { calificacion, comentarioPaciente: comentario || null },
+    });
+  } catch (e) {
+    return comoError(e);
+  }
+  revalidatePath(`/cita/${token}`);
+  return { ok: true };
+}

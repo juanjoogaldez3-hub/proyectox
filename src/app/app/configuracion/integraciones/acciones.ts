@@ -93,6 +93,11 @@ const esquemaWhatsApp = z.object({
     .trim()
     .transform((v) => (v === "" ? undefined : v))
     .pipe(nombrePlantilla.optional()),
+  plantillaSeguimiento: z
+    .string()
+    .trim()
+    .transform((v) => (v === "" ? undefined : v))
+    .pipe(nombrePlantilla.optional()),
   idiomaPlantilla: z.string().trim().regex(/^[a-z]{2}(_[A-Z]{2})?$/, "Idioma no válido (ej. es o es_MX)."),
   horasPrimero: numeroDeFormulario.transform((v) => Math.min(168, Math.max(0, Math.trunc(v)))),
   horasSegundo: numeroDeFormulario.transform((v) => Math.min(168, Math.max(0, Math.trunc(v)))),
@@ -111,6 +116,7 @@ export async function guardarWhatsApp(
       accessToken: datos.get("accessToken") ?? "",
       plantillaRecordatorio: datos.get("plantillaRecordatorio") ?? "",
       plantillaConfirmacion: datos.get("plantillaConfirmacion") ?? "",
+      plantillaSeguimiento: datos.get("plantillaSeguimiento") ?? "",
       idiomaPlantilla: (datos.get("idiomaPlantilla") as string) || "es",
       horasPrimero: (datos.get("horasPrimero") as string) || "24",
       horasSegundo: (datos.get("horasSegundo") as string) || "0",
@@ -140,6 +146,7 @@ export async function guardarWhatsApp(
       nombreVerificado: verificado.nombre,
       plantillaRecordatorio: entrada.plantillaRecordatorio,
       plantillaConfirmacion: entrada.plantillaConfirmacion ?? null,
+      plantillaSeguimiento: entrada.plantillaSeguimiento ?? null,
       idiomaPlantilla: entrada.idiomaPlantilla,
       horasPrimero: entrada.horasPrimero,
       horasSegundo: entrada.horasSegundo,

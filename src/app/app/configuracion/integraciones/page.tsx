@@ -17,6 +17,9 @@ import { esAdmin } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Google y WhatsApp" };
 
+const TEXTO_SEGUIMIENTO =
+  "Hola {{1}}, le escribimos de {{2}}. Ya le toca su {{3}}.\n\nPuede agendar aquí: {{4}}";
+
 const TEXTO_PLANTILLA =
   "Hola {{1}}, le recordamos su cita en {{2}} el {{3}}.\n\nConfirme, cancele o agréguela a su calendario aquí: {{4}}\n\nTambién puede responder 1 para confirmar o 2 para cancelar.";
 
@@ -168,6 +171,7 @@ export default async function PaginaIntegraciones({
                 phoneNumberId: whatsapp.phoneNumberId,
                 plantillaRecordatorio: whatsapp.plantillaRecordatorio,
                 plantillaConfirmacion: whatsapp.plantillaConfirmacion,
+                plantillaSeguimiento: whatsapp.plantillaSeguimiento,
                 idiomaPlantilla: whatsapp.idiomaPlantilla,
                 horasPrimero: whatsapp.horasPrimero,
                 horasSegundo: whatsapp.horasSegundo,
@@ -206,10 +210,17 @@ export default async function PaginaIntegraciones({
               </span>
             </Paso>
             <Paso n={3}>
+              Opcional: una segunda plantilla <Codigo>aviso_control</Codigo> para avisar que le toca su
+              próximo control:
+              <pre className="mt-2 whitespace-pre-wrap rounded bg-white p-3 font-mono text-xs text-tinta-800">
+                {TEXTO_SEGUIMIENTO}
+              </pre>
+            </Paso>
+            <Paso n={4}>
               Creá un usuario del sistema con permiso <Codigo>whatsapp_business_messaging</Codigo>, generá
               un token permanente y pegalo arriba junto con el Phone Number ID.
             </Paso>
-            <Paso n={4}>
+            <Paso n={5}>
               Para que las respuestas 1 / 2 actualicen la agenda, en la app de Meta → WhatsApp →
               Configuración → Webhook poné la URL <Codigo>{urlBase()}/api/whatsapp/webhook</Codigo>, el
               token de verificación que definió quien administra el servidor y suscribí el campo{" "}

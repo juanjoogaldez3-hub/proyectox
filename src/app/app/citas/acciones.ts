@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { requerirSesion } from "@/lib/auth";
 import { verificarLimite } from "@/lib/limites";
 import { comoError, textoOpcional, type EstadoAccion } from "@/lib/acciones";
-import { instanteGT, partesLocalesGT } from "@/lib/gt";
+import { aNumero, fecha, instanteGT, normalizarNit, partesLocalesGT, redondear } from "@/lib/gt";
 import { citaVigente } from "@/lib/citas";
 import { espaciosDisponibles, problemaDeHorario } from "@/lib/espacios";
 import { sincronizarCitaConGoogle } from "@/lib/google";
@@ -18,6 +18,7 @@ import {
   cancelarRecordatorios,
   procesarRecordatorios,
   programarRecordatorios,
+  programarSeguimiento,
 } from "@/lib/agenda";
 
 const esquema = z.object({
@@ -235,7 +236,7 @@ export async function cambiarEstadoCita(id: string, nuevo: EstadoCita): Promise<
       // Reactivada o confirmada: los recordatorios siguen (o vuelven) en pie.
       await programarRecordatorios(cita.id, { avisarAhora: false });
     } else {
-      await cancelarRecordatorios(cita.id);
+      await cancelarRecordatorios(cita.id, nuevo === "CANCELADA");
     }
     await sincronizarCitaConGoogle(cita.id);
 
@@ -329,4 +330,118 @@ export async function buscarEspacios(
     duracionMin: Math.min(600, Math.max(5, Math.trunc(duracionMin) || 30)),
   });
   return espacios.map((e) => partesLocalesGT(e).hora);
+}
+
+// --- Cobro de la consulta ----------------------------------------------------
+
+const esquemaCobro = z.object({
+  monto: z.coerce.number().positive("Escribí cuánto se cobró."),
+  metodoPago: z.string().trim().min(2, "Indicá cómo pagó."),
+  nitCliente: textoOpcional,
+});
+
+/**
+ * Registra el cobro como una venta (así sale en Cobros y en los reportes). El
+ * precio de una consulta ya incluye IVA: se desglosa hacia atrás para que el
+ * total sea exactamente lo que pagó el paciente.
+ */
+export async function registrarCobro(
+  id: string,
+  _estado: EstadoAccion,
+  datos: FormData,
+): Promise<EstadoAccion> {
+  try {
+    const { empresa, usuario } = await requerirSesion();
+    const entrada = esquemaCobro.parse({
+      monto: (datos.get("monto") as string) || "0",
+      metodoPago: datos.get("metodoPago") ?? "",
+      nitCliente: datos.get("nitCliente") ?? "",
+    });
+    const cita = await prisma.cita.findFirst({
+      where: { id, empresaId: empresa.id },
+      include: { contacto: { select: { nombre: true } }, profesional: { select: { nombre: true } } },
+    });
+    if (!cita) return { error: "No encontramos esa cita." };
+    if (cita.ventaId) return { error: "Esta consulta ya tiene un cobro registrado." };
+
+    const iva = aNumero(empresa.ivaPorcentaje);
+    const total = redondear(entrada.monto);
+    const subtotal = redondear(total / (1 + iva / 100));
+    const descripcion = `${cita.motivo}${cita.profesional ? ` · ${cita.profesional.nombre}` : ""} · ${fecha(cita.inicio)}`;
+
+    await prisma.$transaction(async (tx) => {
+      const ultima = await tx.venta.aggregate({ where: { empresaId: empresa.id }, _max: { numero: true } });
+      const venta = await tx.venta.create({
+        data: {
+          empresaId: empresa.id,
+          numero: (ultima._max.numero ?? 0) + 1,
+          contactoId: cita.contactoId,
+          estado: "PAGADA",
+          metodoPago: entrada.metodoPago,
+          nitCliente: normalizarNit(entrada.nitCliente) ?? "CF",
+          nombreFactura: cita.contacto.nombre,
+          ivaPorcentaje: iva,
+          subtotal,
+          iva: redondear(total - subtotal),
+          total,
+          creadaPorId: usuario.id,
+          items: {
+            create: [{ descripcion, cantidad: 1, precioUnitario: subtotal, total: subtotal, orden: 0 }],
+          },
+        },
+      });
+      await tx.cita.update({ where: { id: cita.id }, data: { ventaId: venta.id } });
+    });
+    revalidarAgenda(cita.id, cita.contactoId);
+    revalidatePath("/app/ventas");
+  } catch (e) {
+    return comoError(e);
+  }
+  return { ok: true };
+}
+
+// --- Aviso de control --------------------------------------------------------
+
+const esquemaControl = z.object({
+  cantidad: z.coerce.number().int().min(1, "¿En cuánto tiempo?").max(36),
+  unidad: z.enum(["dias", "semanas", "meses"]),
+  nota: z.string().trim().min(3, "Escribí qué le toca (ej. control de presión)."),
+});
+
+export async function programarControl(
+  id: string,
+  _estado: EstadoAccion,
+  datos: FormData,
+): Promise<EstadoAccion> {
+  try {
+    const { empresa, usuario } = await requerirSesion();
+    const entrada = esquemaControl.parse({
+      cantidad: (datos.get("cantidad") as string) || "0",
+      unidad: (datos.get("unidad") as string) || "meses",
+      nota: datos.get("nota") ?? "",
+    });
+    const cita = await prisma.cita.findFirst({
+      where: { id, empresaId: empresa.id },
+      select: { id: true, contactoId: true, estado: true, inicio: true },
+    });
+    if (!cita) return { error: "No encontramos esa cita." };
+    if (cita.estado !== "COMPLETADA") return { error: "Primero marcá la cita como atendida." };
+
+    // El aviso sale a las 9 de la mañana del día que toca.
+    const { fecha: hoy } = partesLocalesGT(new Date());
+    const [a, m, d] = hoy.split("-").map(Number);
+    const base = new Date(Date.UTC(a, m - 1, d));
+    if (entrada.unidad === "dias") base.setUTCDate(base.getUTCDate() + entrada.cantidad);
+    if (entrada.unidad === "semanas") base.setUTCDate(base.getUTCDate() + entrada.cantidad * 7);
+    if (entrada.unidad === "meses") base.setUTCMonth(base.getUTCMonth() + entrada.cantidad);
+    const cuando = instanteGT(base.toISOString().slice(0, 10), "09:00");
+    if (!cuando) return { error: "No se pudo calcular la fecha." };
+
+    await programarSeguimiento({ citaId: cita.id, fecha: cuando, nota: entrada.nota, usuarioId: usuario.id });
+    revalidarAgenda(cita.id, cita.contactoId);
+    revalidatePath("/app/actividades");
+  } catch (e) {
+    return comoError(e);
+  }
+  return { ok: true };
 }
