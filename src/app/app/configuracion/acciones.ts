@@ -292,3 +292,96 @@ export async function cambiarPassword(
 
   return { ok: true };
 }
+
+// --- Profesionales de la agenda ---------------------------------------------
+
+const esquemaProfesional = z.object({
+  nombre: z.string().trim().min(2, "Escribí el nombre del profesional."),
+  especialidad: textoOpcional,
+  color: z
+    .string()
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "El color no es válido.")
+    .default("#3366f5"),
+  duracionMin: numeroDeFormulario.transform((v) => Math.min(600, Math.max(5, Math.trunc(v) || 30))),
+  calendarioId: textoOpcional,
+});
+
+function leerProfesional(datos: FormData) {
+  return esquemaProfesional.parse({
+    nombre: datos.get("nombre") ?? "",
+    especialidad: datos.get("especialidad") ?? "",
+    color: (datos.get("color") as string) || "#3366f5",
+    duracionMin: (datos.get("duracionMin") as string) || "30",
+    calendarioId: datos.get("calendarioId") ?? "",
+  });
+}
+
+export async function crearProfesional(
+  _estado: EstadoAccion,
+  datos: FormData,
+): Promise<EstadoAccion> {
+  try {
+    const { empresa } = await requerirAdmin();
+    const entrada = leerProfesional(datos);
+    await prisma.profesional.create({
+      data: {
+        empresaId: empresa.id,
+        nombre: entrada.nombre,
+        especialidad: entrada.especialidad ?? null,
+        color: entrada.color,
+        duracionMin: entrada.duracionMin,
+        calendarioId: entrada.calendarioId ?? null,
+      },
+    });
+  } catch (e) {
+    return comoError(e);
+  }
+
+  revalidatePath("/app/configuracion/profesionales");
+  revalidatePath("/app/citas");
+  return { ok: true };
+}
+
+export async function actualizarProfesional(
+  id: string,
+  _estado: EstadoAccion,
+  datos: FormData,
+): Promise<EstadoAccion> {
+  try {
+    const { empresa } = await requerirAdmin();
+    const entrada = leerProfesional(datos);
+    const { count } = await prisma.profesional.updateMany({
+      where: { id, empresaId: empresa.id },
+      data: {
+        nombre: entrada.nombre,
+        especialidad: entrada.especialidad ?? null,
+        color: entrada.color,
+        duracionMin: entrada.duracionMin,
+        calendarioId: entrada.calendarioId ?? null,
+      },
+    });
+    if (count === 0) return { error: "No encontramos a ese profesional." };
+  } catch (e) {
+    return comoError(e);
+  }
+
+  revalidatePath("/app/configuracion/profesionales");
+  revalidatePath("/app/citas");
+  return { ok: true };
+}
+
+export async function alternarProfesional(id: string): Promise<void> {
+  const { empresa } = await requerirAdmin();
+  const profesional = await prisma.profesional.findFirst({
+    where: { id, empresaId: empresa.id },
+    select: { id: true, activo: true },
+  });
+  if (!profesional) return;
+  await prisma.profesional.update({
+    where: { id: profesional.id },
+    data: { activo: !profesional.activo },
+  });
+  revalidatePath("/app/configuracion/profesionales");
+  revalidatePath("/app/citas");
+}

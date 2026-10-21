@@ -7,6 +7,8 @@ import { cx } from "@/components/ui";
 const SECCIONES = [
   { href: "/app/configuracion", texto: "Mi negocio" },
   { href: "/app/configuracion/usuarios", texto: "Usuarios" },
+  { href: "/app/configuracion/profesionales", texto: "Profesionales" },
+  { href: "/app/configuracion/integraciones", texto: "Google y WhatsApp" },
   { href: "/app/configuracion/embudo", texto: "Embudo" },
   { href: "/app/configuracion/plan", texto: "Plan y pagos" },
 ];

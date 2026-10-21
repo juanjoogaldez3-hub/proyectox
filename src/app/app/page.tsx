@@ -4,7 +4,16 @@ import { requerirSesion } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { BotonEnlace, EstadoVacio, Insignia, Tarjeta } from "@/components/ui";
 import { Icono } from "@/components/iconos";
-import { aNumero, finDeHoyGT, inicioDelMesGT, quetzales, tiempoRelativo } from "@/lib/gt";
+import {
+  aNumero,
+  finDeHoyGT,
+  hora,
+  inicioDeHoyGT,
+  inicioDelMesGT,
+  quetzales,
+  tiempoRelativo,
+} from "@/lib/gt";
+import { ESTADOS_CITA } from "@/lib/citas";
 
 export const metadata: Metadata = { title: "Resumen" };
 
@@ -42,6 +51,7 @@ export default async function PaginaResumen() {
     bajoStock,
     proximasActividades,
     porEtapa,
+    citasHoy,
   ] = await Promise.all([
     prisma.venta.aggregate({
       where: { empresaId, estado: { not: "ANULADA" }, fecha: { gte: desde } },
@@ -81,7 +91,21 @@ export default async function PaginaResumen() {
         _count: { select: { oportunidades: { where: { estado: "ABIERTA" } } } },
       },
     }),
+    prisma.cita.findMany({
+      where: {
+        empresaId,
+        estado: { not: "CANCELADA" },
+        inicio: { gte: inicioDeHoyGT(), lte: finDeHoyGT() },
+      },
+      orderBy: { inicio: "asc" },
+      take: 12,
+      include: {
+        contacto: { select: { nombre: true } },
+        profesional: { select: { nombre: true, color: true } },
+      },
+    }),
   ]);
+  const porConfirmarHoy = citasHoy.filter((c) => c.estado === "PROGRAMADA").length;
 
   const productosBajoStock = Number(bajoStock[0]?.conteo ?? 0);
   const hayDatos =
@@ -100,8 +124,11 @@ export default async function PaginaResumen() {
           <BotonEnlace href="/app/contactos/nuevo" variante="secundario">
             <Icono nombre="mas" /> Contacto
           </BotonEnlace>
-          <BotonEnlace href="/app/cotizaciones/nueva">
+          <BotonEnlace href="/app/cotizaciones/nueva" variante="secundario">
             <Icono nombre="mas" /> Cotización
+          </BotonEnlace>
+          <BotonEnlace href="/app/citas/nueva">
+            <Icono nombre="mas" /> Cita
           </BotonEnlace>
         </div>
       </div>
@@ -144,6 +171,50 @@ export default async function PaginaResumen() {
           {productosBajoStock} producto{productosBajoStock === 1 ? "" : "s"} llegó al stock
           mínimo. Revisá qué necesitás pedir.
         </Link>
+      )}
+
+      {citasHoy.length > 0 && (
+        <Tarjeta className="mt-6 p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold text-tinta-900">
+              Citas de hoy
+              {porConfirmarHoy > 0 && (
+                <span className="ml-2 text-sm font-normal text-tinta-500">
+                  {porConfirmarHoy} sin confirmar
+                </span>
+              )}
+            </h2>
+            <Link href="/app/citas" className="text-sm text-marca-600 hover:underline">
+              Ver agenda
+            </Link>
+          </div>
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {citasHoy.map((c) => (
+              <li key={c.id}>
+                <Link
+                  href={`/app/citas/${c.id}`}
+                  className="flex items-center gap-3 rounded-lg border border-tinta-100 px-3 py-2 hover:bg-tinta-50"
+                >
+                  <span
+                    className="h-8 w-1 shrink-0 rounded-full"
+                    style={{ backgroundColor: c.profesional?.color ?? "var(--color-tinta-300)" }}
+                  />
+                  <span className="w-16 shrink-0 text-sm font-semibold text-tinta-900">
+                    {hora(c.inicio)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-tinta-800">{c.contacto.nombre}</span>
+                    <span className="block truncate text-xs text-tinta-500">
+                      {c.motivo}
+                      {c.profesional && ` · ${c.profesional.nombre}`}
+                    </span>
+                  </span>
+                  <Insignia tono={ESTADOS_CITA[c.estado].tono}>{ESTADOS_CITA[c.estado].texto}</Insignia>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Tarjeta>
       )}
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">

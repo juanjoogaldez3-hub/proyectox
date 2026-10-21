@@ -306,3 +306,69 @@ export function tiempoRelativo(valor: Date | string | null | undefined): string 
   if (Math.abs(dias) < 30) return rtf.format(dias, "day");
   return rtf.format(Math.round(dias / 30), "month");
 }
+
+// ---------------------------------------------------------------------------
+// Horas de la agenda
+// ---------------------------------------------------------------------------
+
+/**
+ * Convierte la fecha y hora que escribió la recepción ("2026-08-12", "15:30")
+ * al instante exacto en Guatemala. No se usa `new Date("2026-08-12T15:30")`
+ * porque eso lo interpreta en la zona del servidor, que casi siempre es UTC, y
+ * la cita quedaría corrida seis horas.
+ */
+export function instanteGT(fechaTexto: string, horaTexto: string): Date | null {
+  const f = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fechaTexto.trim());
+  const h = /^(\d{1,2}):(\d{2})$/.exec(horaTexto.trim());
+  if (!f || !h) return null;
+  const [ano, mes, dia] = [Number(f[1]), Number(f[2]) - 1, Number(f[3])];
+  const [hora, minuto] = [Number(h[1]), Number(h[2])];
+  if (hora > 23 || minuto > 59) return null;
+  const instante = new Date(Date.UTC(ano, mes, dia, hora + HORAS_DETRAS_DE_UTC, minuto));
+  // Date.UTC acepta el 31 de febrero y lo corre a marzo: lo rechazamos.
+  const { ano: a, mes: m, dia: d } = hoyEnGuatemala(instante);
+  if (a !== ano || m !== mes || d !== dia) return null;
+  return instante;
+}
+
+/** Lo inverso de `instanteGT`: valores para los inputs de fecha y hora. */
+export function partesLocalesGT(valor: Date): { fecha: string; hora: string } {
+  const local = new Date(valor.getTime() - HORAS_DETRAS_DE_UTC * 3_600_000);
+  const iso = local.toISOString();
+  return { fecha: iso.slice(0, 10), hora: iso.slice(11, 16) };
+}
+
+/** "YYYY-MM-DD" de hoy en Guatemala, para los selectores de fecha. */
+export function fechaDeHoyGT(): string {
+  return partesLocalesGT(new Date()).fecha;
+}
+
+const formatoHora = new Intl.DateTimeFormat("es-GT", {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: ZONA_GT,
+});
+
+const formatoDiaLargo = new Intl.DateTimeFormat("es-GT", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: ZONA_GT,
+});
+
+/** "10:30 a. m." */
+export function hora(valor: Date | string | null | undefined): string {
+  if (!valor) return "";
+  return formatoHora.format(new Date(valor));
+}
+
+/** "martes, 21 de octubre" */
+export function diaLargo(valor: Date | string | null | undefined): string {
+  if (!valor) return "";
+  return formatoDiaLargo.format(new Date(valor));
+}
+
+/** "martes, 21 de octubre a las 10:30 a. m." — para mensajes al paciente. */
+export function fechaDeCita(valor: Date | string): string {
+  return `${diaLargo(valor)} a las ${hora(valor)}`;
+}

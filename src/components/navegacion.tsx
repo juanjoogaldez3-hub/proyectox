@@ -8,7 +8,8 @@ import { cx } from "@/components/ui";
 
 const SECCIONES: { href: string; texto: string; icono: NombreIcono }[] = [
   { href: "/app", texto: "Resumen", icono: "resumen" },
-  { href: "/app/contactos", texto: "Contactos", icono: "contactos" },
+  { href: "/app/citas", texto: "Agenda", icono: "calendario" },
+  { href: "/app/contactos", texto: "Pacientes y contactos", icono: "contactos" },
   { href: "/app/embudo", texto: "Embudo", icono: "embudo" },
   { href: "/app/actividades", texto: "Actividades", icono: "actividades" },
   { href: "/app/cotizaciones", texto: "Cotizaciones", icono: "cotizaciones" },
