@@ -122,7 +122,7 @@ export function FormularioCita({
             </select>
             <span className="mt-1 block text-xs text-tinta-400">
               ¿Es nuevo?{" "}
-              <Link href="/app/contactos/nuevo" className="text-marca-600 hover:underline">
+              <Link href="/app/pacientes/nuevo" className="text-marca-600 hover:underline">
                 Registralo primero
               </Link>
               .

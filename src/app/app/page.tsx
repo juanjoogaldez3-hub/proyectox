@@ -52,6 +52,8 @@ export default async function PaginaResumen() {
     proximasActividades,
     porEtapa,
     citasHoy,
+    citasMes,
+    recordatoriosFallidos,
   ] = await Promise.all([
     prisma.venta.aggregate({
       where: { empresaId, estado: { not: "ANULADA" }, fecha: { gte: desde } },
@@ -96,6 +98,7 @@ export default async function PaginaResumen() {
         empresaId,
         estado: { not: "CANCELADA" },
         inicio: { gte: inicioDeHoyGT(), lte: finDeHoyGT() },
+        ...(usuario.rol === "MEDICO" ? { profesionalId: usuario.profesionalId ?? "ninguno" } : {}),
       },
       orderBy: { inicio: "asc" },
       take: 12,
@@ -104,8 +107,20 @@ export default async function PaginaResumen() {
         profesional: { select: { nombre: true, color: true } },
       },
     }),
+    prisma.cita.groupBy({
+      by: ["estado"],
+      where: { empresaId, inicio: { gte: desde, lt: new Date() } },
+      _count: true,
+    }),
+    // Recordatorios que no se pudieron mandar en las últimas 24 h.
+    prisma.recordatorio.count({
+      where: { empresaId, estado: "FALLIDO", actualizadoEl: { gte: new Date(Date.now() - 86_400_000) } },
+    }),
   ]);
   const porConfirmarHoy = citasHoy.filter((c) => c.estado === "PROGRAMADA").length;
+  const esClinica = empresa.giro === "CLINICA";
+  const atendidasMes = citasMes.find((c) => c.estado === "COMPLETADA")?._count ?? 0;
+  const faltasMes = citasMes.find((c) => c.estado === "NO_ASISTIO")?._count ?? 0;
 
   const productosBajoStock = Number(bajoStock[0]?.conteo ?? 0);
   const hayDatos =
@@ -121,18 +136,65 @@ export default async function PaginaResumen() {
           <p className="mt-1 text-sm text-tinta-500">Así va tu negocio este mes.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <BotonEnlace href="/app/contactos/nuevo" variante="secundario">
-            <Icono nombre="mas" /> Contacto
-          </BotonEnlace>
-          <BotonEnlace href="/app/cotizaciones/nueva" variante="secundario">
-            <Icono nombre="mas" /> Cotización
-          </BotonEnlace>
+          {empresa.giro === "CLINICA" ? (
+            <BotonEnlace href="/app/pacientes/nuevo" variante="secundario">
+              <Icono nombre="mas" /> Paciente
+            </BotonEnlace>
+          ) : (
+            <>
+              <BotonEnlace href="/app/contactos/nuevo" variante="secundario">
+                <Icono nombre="mas" /> Contacto
+              </BotonEnlace>
+              <BotonEnlace href="/app/cotizaciones/nueva" variante="secundario">
+                <Icono nombre="mas" /> Cotización
+              </BotonEnlace>
+            </>
+          )}
           <BotonEnlace href="/app/citas/nueva">
             <Icono nombre="mas" /> Cita
           </BotonEnlace>
         </div>
       </div>
 
+      {recordatoriosFallidos > 0 && (
+        <Link
+          href="/app/configuracion/integraciones"
+          className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 hover:bg-red-100"
+        >
+          <Icono nombre="alerta" />
+          {recordatoriosFallidos} recordatorio{recordatoriosFallidos === 1 ? "" : "s"} de WhatsApp no se
+          pudo mandar en las últimas 24 horas. Revisá la conexión o avisale a esos pacientes por teléfono.
+        </Link>
+      )}
+
+      {esClinica ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Metrica
+            titulo="Citas de hoy"
+            valor={String(citasHoy.length)}
+            detalle={porConfirmarHoy > 0 ? `${porConfirmarHoy} sin confirmar` : "Todas confirmadas"}
+            href="/app/citas"
+          />
+          <Metrica
+            titulo="Cobrado este mes"
+            valor={quetzales(aNumero(ventasMes._sum.total))}
+            detalle={`${ventasMes._count} cobro${ventasMes._count === 1 ? "" : "s"}`}
+            href="/app/ventas"
+          />
+          <Metrica
+            titulo="Atendidos este mes"
+            valor={String(atendidasMes)}
+            detalle={faltasMes > 0 ? `${faltasMes} no se presentaron` : "Sin inasistencias"}
+            href="/app/reportes"
+          />
+          <Metrica
+            titulo="Pacientes nuevos"
+            valor={String(contactosMes)}
+            detalle="Registrados este mes"
+            href="/app/pacientes"
+          />
+        </div>
+      ) : (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metrica
           titulo="Vendido este mes"
@@ -161,6 +223,7 @@ export default async function PaginaResumen() {
           href="/app/contactos"
         />
       </div>
+      )}
 
       {productosBajoStock > 0 && (
         <Link
@@ -271,6 +334,7 @@ export default async function PaginaResumen() {
           )}
         </Tarjeta>
 
+        {!esClinica && (
         <Tarjeta className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-tinta-900">Embudo</h2>
@@ -297,9 +361,46 @@ export default async function PaginaResumen() {
             </ul>
           )}
         </Tarjeta>
+        )}
       </div>
 
-      {!hayDatos && (
+      {esClinica && citasHoy.length === 0 && contactosMes === 0 && (
+        <Tarjeta className="mt-6 p-5">
+          <h2 className="font-semibold text-tinta-900">Empezá en 4 pasos</h2>
+          <ol className="mt-3 space-y-2 text-sm text-tinta-600">
+            <li>
+              1.{" "}
+              <Link href="/app/configuracion/profesionales" className="text-marca-600 hover:underline">
+                Agregá a los médicos y su horario
+              </Link>
+              .
+            </li>
+            <li>
+              2.{" "}
+              <Link href="/app/configuracion/servicios" className="text-marca-600 hover:underline">
+                Cargá tus servicios con precio
+              </Link>{" "}
+              y activá las reservas en línea.
+            </li>
+            <li>
+              3.{" "}
+              <Link href="/app/configuracion/integraciones" className="text-marca-600 hover:underline">
+                Conectá Google Calendar y WhatsApp
+              </Link>
+              .
+            </li>
+            <li>
+              4.{" "}
+              <Link href="/app/citas/nueva" className="text-marca-600 hover:underline">
+                Agendá la primera cita
+              </Link>
+              .
+            </li>
+          </ol>
+        </Tarjeta>
+      )}
+
+      {!hayDatos && !esClinica && (
         <Tarjeta className="mt-6 p-5">
           <h2 className="font-semibold text-tinta-900">Empezá en 3 pasos</h2>
           <ol className="mt-3 space-y-2 text-sm text-tinta-600">

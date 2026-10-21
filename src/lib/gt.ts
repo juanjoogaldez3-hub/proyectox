@@ -384,3 +384,13 @@ export function diaLargo(valor: Date | string | null | undefined): string {
 export function fechaDeCita(valor: Date | string): string {
   return `${diaLargo(valor)} a las ${hora(valor)}`;
 }
+
+/** Años cumplidos a hoy (en Guatemala) para una fecha de nacimiento. */
+export function edad(nacimiento: Date | string | null | undefined, referencia: Date = new Date()): number | null {
+  if (!nacimiento) return null;
+  const n = partesLocalesGT(new Date(nacimiento)).fecha.split("-").map(Number);
+  const h = partesLocalesGT(referencia).fecha.split("-").map(Number);
+  let anos = h[0] - n[0];
+  if (h[1] < n[1] || (h[1] === n[1] && h[2] < n[2])) anos -= 1;
+  return anos >= 0 ? anos : null;
+}

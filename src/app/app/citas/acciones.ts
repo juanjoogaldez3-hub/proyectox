@@ -117,7 +117,10 @@ function revalidarAgenda(citaId?: string, contactoId?: string) {
   revalidatePath("/app/citas");
   revalidatePath("/app");
   if (citaId) revalidatePath(`/app/citas/${citaId}`);
-  if (contactoId) revalidatePath(`/app/contactos/${contactoId}`);
+  if (contactoId) {
+    revalidatePath(`/app/contactos/${contactoId}`);
+    revalidatePath(`/app/pacientes/${contactoId}`);
+  }
 }
 
 export async function crearCita(_estado: EstadoAccion, datos: FormData): Promise<EstadoAccion> {

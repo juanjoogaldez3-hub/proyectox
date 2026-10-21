@@ -53,10 +53,15 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode })
 
 export default async function PaginaCita({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { empresa } = await requerirSesion();
+  const { empresa, usuario } = await requerirSesion();
 
   const cita = await prisma.cita.findFirst({
-    where: { id, empresaId: empresa.id },
+    // El médico solo abre las citas de su agenda.
+    where: {
+      id,
+      empresaId: empresa.id,
+      ...(usuario.rol === "MEDICO" ? { profesionalId: usuario.profesionalId ?? "ninguno" } : {}),
+    },
     include: {
       contacto: { select: { id: true, nombre: true, whatsapp: true, telefono: true, email: true } },
       profesional: { select: { nombre: true, especialidad: true, color: true } },
@@ -163,7 +168,7 @@ export default async function PaginaCita({ params }: { params: Promise<{ id: str
             ) : !cita.contacto.whatsapp ? (
               <p className="text-sm text-tinta-500">
                 El paciente no tiene WhatsApp registrado.{" "}
-                <Link href={`/app/contactos/${cita.contacto.id}/editar`} className="text-marca-600 hover:underline">
+                <Link href={`/app/pacientes/${cita.contacto.id}/editar`} className="text-marca-600 hover:underline">
                   Agregalo en su ficha
                 </Link>{" "}
                 y reprogramá para activar los recordatorios.
@@ -213,7 +218,7 @@ export default async function PaginaCita({ params }: { params: Promise<{ id: str
               <Dato
                 etiqueta="Paciente"
                 valor={
-                  <Link href={`/app/contactos/${cita.contacto.id}`} className="hover:text-marca-600">
+                  <Link href={`/app/pacientes/${cita.contacto.id}`} className="hover:text-marca-600">
                     {cita.contacto.nombre}
                   </Link>
                 }
