@@ -415,6 +415,8 @@ async function sembrarClinica() {
       plan: "NEGOCIO",
       estadoSuscripcion: "PRUEBA",
       pruebaTermina: diasDesdeHoy(14),
+      giro: "CLINICA",
+      reservasActivas: true,
       etapas: { create: ETAPAS },
     },
   });
@@ -430,9 +432,52 @@ async function sembrarClinica() {
     },
   });
 
+  // Lunes a viernes 8–12 y 14–18; la odontóloga también sábados por la mañana.
+  const HORARIO = [1, 2, 3, 4, 5].flatMap((diaSemana) => [
+    { diaSemana, desde: "08:00", hasta: "12:00" },
+    { diaSemana, desde: "14:00", hasta: "18:00" },
+  ]);
   const profesionales = await Promise.all(
-    PROFESIONALES.map((p) => prisma.profesional.create({ data: { empresaId: empresa.id, ...p } })),
+    PROFESIONALES.map((p, i) =>
+      prisma.profesional.create({
+        data: {
+          empresaId: empresa.id,
+          ...p,
+          horarios: {
+            create: i === 2 ? [...HORARIO, { diaSemana: 6, desde: "08:00", hasta: "12:00" }] : HORARIO,
+          },
+        },
+      }),
+    ),
   );
+
+  await prisma.usuario.create({
+    data: {
+      empresaId: empresa.id,
+      nombre: "Dra. Ana Morales",
+      email: "medico@crmchapin.gt",
+      passwordHash: await bcrypt.hash(PASSWORD_DEMO, 10),
+      rol: "MEDICO",
+      profesionalId: profesionales[0].id,
+    },
+  });
+
+  const servicios = await Promise.all(
+    [
+      { nombre: "Consulta general", duracionMin: 30, precio: 250, profesionalIds: [profesionales[0].id] },
+      { nombre: "Consulta pediátrica", duracionMin: 30, precio: 300, profesionalIds: [profesionales[1].id] },
+      { nombre: "Limpieza dental", duracionMin: 45, precio: 350, profesionalIds: [profesionales[2].id] },
+      { nombre: "Vacunación", duracionMin: 15, precio: 150, profesionalIds: [profesionales[0].id, profesionales[1].id] },
+    ].map((t) => prisma.tipoConsulta.create({ data: { empresaId: empresa.id, ...t } })),
+  );
+
+  // Almuerzo largo del viernes y vacaciones del pediatra la otra semana.
+  await prisma.bloqueoAgenda.createMany({
+    data: [
+      { empresaId: empresa.id, profesionalId: profesionales[1].id, inicio: horaGT(7, 0), fin: horaGT(10, 0), motivo: "Vacaciones" },
+      { empresaId: empresa.id, profesionalId: profesionales[0].id, inicio: horaGT(1, 12), fin: horaGT(1, 15), motivo: "Congreso médico" },
+    ],
+  });
 
   const pacientes = await Promise.all(
     PACIENTES.map((p) =>
@@ -461,6 +506,9 @@ async function sembrarClinica() {
     motivo: string;
     estado: "PROGRAMADA" | "CONFIRMADA" | "COMPLETADA" | "NO_ASISTIO" | "CANCELADA";
   }[] = [
+    { dias: -30, hora: 9, paciente: 0, profesional: 0, motivo: "Consulta general", estado: "COMPLETADA" },
+    { dias: -21, hora: 15, paciente: 2, profesional: 1, motivo: "Consulta pediátrica", estado: "COMPLETADA" },
+    { dias: -14, hora: 10, paciente: 4, profesional: 0, motivo: "Consulta general", estado: "COMPLETADA" },
     { dias: -2, hora: 9, paciente: 0, profesional: 0, motivo: "Consulta general", estado: "COMPLETADA" },
     { dias: -2, hora: 10, paciente: 3, profesional: 1, motivo: "Control de niño sano", estado: "NO_ASISTIO" },
     { dias: -1, hora: 15, paciente: 5, profesional: 2, motivo: "Limpieza dental", estado: "COMPLETADA" },
@@ -475,9 +523,40 @@ async function sembrarClinica() {
     { dias: 4, hora: 8, paciente: 2, profesional: 0, motivo: "Control", estado: "PROGRAMADA" },
   ];
 
+  let numeroCobro = 0;
   for (const c of CITAS) {
     const profesional = profesionales[c.profesional];
     const inicio = horaGT(c.dias, c.hora, c.minuto);
+    const servicio = servicios.find((s) => s.nombre === c.motivo);
+    // Las atendidas quedan cobradas, para que Cobros y Reportes tengan datos.
+    const venta =
+      c.estado === "COMPLETADA"
+        ? await prisma.venta.create({
+            data: {
+              empresaId: empresa.id,
+              numero: ++numeroCobro,
+              contactoId: pacientes[c.paciente].id,
+              estado: "PAGADA",
+              metodoPago: numeroCobro % 2 ? "Efectivo" : "Tarjeta",
+              fecha: inicio,
+              nombreFactura: pacientes[c.paciente].nombre,
+              subtotal: Math.round((Number(servicio?.precio ?? 250) / 1.12) * 100) / 100,
+              iva: Math.round((Number(servicio?.precio ?? 250) - Number(servicio?.precio ?? 250) / 1.12) * 100) / 100,
+              total: Number(servicio?.precio ?? 250),
+              creadaPorId: recepcion.id,
+              items: {
+                create: [
+                  {
+                    descripcion: `${c.motivo} · ${profesional.nombre}`,
+                    cantidad: 1,
+                    precioUnitario: Math.round((Number(servicio?.precio ?? 250) / 1.12) * 100) / 100,
+                    total: Math.round((Number(servicio?.precio ?? 250) / 1.12) * 100) / 100,
+                  },
+                ],
+              },
+            },
+          })
+        : null;
     await prisma.cita.create({
       data: {
         empresaId: empresa.id,
@@ -493,14 +572,55 @@ async function sembrarClinica() {
         canceladaEl: c.estado === "CANCELADA" ? diasDesdeHoy(-1) : null,
         motivoCancelacion: c.estado === "CANCELADA" ? "paciente desde su enlace: viaje de trabajo" : null,
         creadaPorId: recepcion.id,
+        tipoConsultaId: servicio?.id ?? null,
+        ventaId: venta?.id ?? null,
+        origen: c.dias === 1 && c.hora === 9 ? "EN_LINEA" : "RECEPCION",
+        calificacion: venta && c.dias < -10 ? 5 : null,
+        comentarioPaciente: venta && c.dias === -30 ? "Muy amable la doctora y puntual." : null,
       },
     });
   }
 
+  // Datos médicos y una nota de expediente para la primera paciente.
+  await prisma.contacto.update({
+    where: { id: pacientes[0].id },
+    data: {
+      fechaNacimiento: horaGT(-365 * 52, 12),
+      dpi: "2345678900101",
+      sexo: "Femenino",
+      tipoSangre: "O+",
+      seguroMedico: "IGSS",
+      alergias: "Penicilina",
+      antecedentes: "Hipertensión controlada desde 2019.",
+      contactoEmergenciaNombre: "Luis Castillo (esposo)",
+      contactoEmergenciaTelefono: "50255519999",
+      consentimientoEl: horaGT(-30, 9),
+    },
+  });
+  const usuarioMedico = await prisma.usuario.findUniqueOrThrow({ where: { email: "medico@crmchapin.gt" } });
+  await prisma.notaClinica.create({
+    data: {
+      empresaId: empresa.id,
+      contactoId: pacientes[0].id,
+      profesionalId: profesionales[0].id,
+      usuarioId: usuarioMedico.id,
+      motivo: "Control de presión",
+      presion: "135/85",
+      pesoKg: "68",
+      tallaCm: "160",
+      temperatura: "36.6",
+      diagnostico: "Hipertensión arterial en control.",
+      tratamiento: "Dieta baja en sodio, caminar 30 minutos diarios. Control en 3 meses.",
+      receta: "Losartán 50 mg — 1 tableta cada mañana por 90 días",
+      creadoEl: horaGT(-2, 9, 25),
+    },
+  });
+
   console.log("Clínica de demostración lista.");
   console.log(`  Empresa:    ${empresa.nombre}`);
-  console.log(`  Usuario:    ${EMAIL_CLINICA}`);
+  console.log(`  Usuario:    ${EMAIL_CLINICA}  (médico: medico@crmchapin.gt)`);
   console.log(`  Contraseña: ${PASSWORD_DEMO}`);
+  console.log(`  Reservas:   /reservar/${SLUG_CLINICA}`);
 }
 
 main()

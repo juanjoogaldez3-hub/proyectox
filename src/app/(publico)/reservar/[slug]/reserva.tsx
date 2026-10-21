@@ -69,6 +69,10 @@ export function Reserva({
     (p) => !servicio || servicio.profesionalIds.length === 0 || servicio.profesionalIds.includes(p.id),
   );
   const listoServicio = servicios.length === 0 || Boolean(servicioId);
+  // Los pasos se numeran según los que realmente se muestran.
+  const conServicio = servicios.length > 0;
+  const conProfesional = listoServicio && profesionalesDelServicio.length > 1;
+  const nDia = 1 + Number(conServicio) + Number(conProfesional);
 
   useEffect(() => {
     setEspacio(null);
@@ -115,7 +119,7 @@ export function Reserva({
       )}
 
       {listoServicio && profesionalesDelServicio.length > 1 && (
-        <Paso n={2} titulo="¿Con quién?" listo>
+        <Paso n={1 + Number(conServicio)} titulo="¿Con quién?" listo>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Opcion activa={profesionalId === ""} onClick={() => setProfesionalId("")}>
               <span className="block font-medium">Con quien tenga espacio</span>
@@ -132,7 +136,7 @@ export function Reserva({
       )}
 
       {listoServicio && (
-        <Paso n={3} titulo="¿Qué día y a qué hora?" listo={Boolean(espacio)}>
+        <Paso n={nDia} titulo="¿Qué día y a qué hora?" listo={Boolean(espacio)}>
           <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-2">
             {dias.map((d) => (
               <button
@@ -180,7 +184,7 @@ export function Reserva({
       )}
 
       {espacio && (
-        <Paso n={4} titulo="Sus datos">
+        <Paso n={nDia + 1} titulo="Sus datos">
           <form
             onSubmit={(ev) => {
               ev.preventDefault();

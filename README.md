@@ -8,12 +8,35 @@ venderse por suscripción.
 
 ## Qué incluye
 
+**Modo clínica**
+- Al registrarse (o en Configuración) se elige *Clínica o consultorio*: el menú
+  pasa a Agenda, Pacientes, Pendientes, Cobros y Reportes, y desaparecen
+  Embudo y Cotizaciones. No se borra nada al cambiar.
+- Roles: propietario, administrador, recepción y **médico**. El médico ve solo
+  su agenda y sus pacientes, y es quien escribe en el expediente.
+
+**Pacientes**
+- Lista con búsqueda por nombre, WhatsApp, DPI o correo, con última visita y
+  próxima cita.
+- Ficha con fecha de nacimiento (edad), DPI, sexo, tipo de sangre, seguro,
+  alergias (en rojo), antecedentes, contacto de emergencia y autorización del
+  manejo de datos de salud.
+- **Historial completo de citas** de cada paciente con estado, profesional,
+  cobro y calificación, más contadores de atendidas e inasistencias.
+- **Expediente clínico** (solo médicos y administradores): notas por consulta
+  con signos vitales, diagnóstico, tratamiento y receta imprimible con los
+  datos de la clínica. Cada apertura queda en una bitácora.
+
 **Agenda para clínicas y consultorios**
-- Agenda por día o por semana, filtrable por profesional (médico, odontólogo,
-  terapeuta…), con colores por profesional. Los profesionales no necesitan
-  usuario: la recepción agenda por ellos.
-- Citas con paciente, profesional, motivo, duración y notas internas. No deja
-  encimar dos citas del mismo profesional.
+- Vista de día en cuadrícula, con una columna por profesional, su horario en
+  blanco y los bloqueos rayados; tocar un hueco abre la cita con todo puesto.
+  También vista de lista y de semana.
+- Horario semanal por profesional (mañana y tarde) y bloqueos por vacaciones,
+  almuerzo o feriado, de un profesional o de toda la clínica.
+- Al agendar se ofrecen las horas libres. No deja agendar encima de otra
+  cita, de un bloqueo, fuera de horario ni sobre algo que el médico tenga en
+  su Google Calendar, salvo que se marque *sobreturno*.
+- Servicios con duración y precio; el precio se propone al cobrar.
 - Estados: programada, confirmada, atendida, no asistió y cancelada. Cada cambio
   queda anotado en el historial del paciente.
 - **Google Calendar para la clínica y para el paciente.** La clínica conecta su
@@ -34,6 +57,22 @@ venderse por suscripción.
   Google Calendar y se le contesta automáticamente. Cualquier otro mensaje queda
   en su historial para que la recepción lo lea.
 - Citas de hoy en el tablero de resumen y en la ficha de cada paciente.
+
+**Reservas en línea, cobros y seguimiento**
+- `/reservar/<slug>`: el paciente elige servicio, profesional (o "con quien
+  tenga espacio"), día y hora, y recibe su confirmación por WhatsApp. El
+  espacio se vuelve a validar al reservar; hay campo trampa contra robots y un
+  tope de dos reservas en línea por número.
+- **Cobro de la consulta** desde la cita: queda como venta (con el IVA
+  desglosado) y sale en Cobros y en Reportes.
+- **Aviso de control**: al atender, se programa "le toca su control en 3
+  meses"; ese día sale un WhatsApp para que vuelva a agendar y queda una tarea
+  para la recepción.
+- El paciente **califica la atención** desde su enlace.
+- Reportes de clínica: cobrado, asistencia, ingresos e inasistencia por
+  médico, servicios más pedidos, reservas en línea y calificación promedio.
+- Tope de mensajes de WhatsApp por plan, aviso en el resumen y correo al
+  propietario cuando un recordatorio no se pudo mandar.
 
 **Núcleo CRM**
 - Contactos con teléfono, NIT, departamento, municipio, origen y etiquetas.
@@ -121,8 +160,10 @@ Con los datos de demostración podés entrar como:
 
 - **Propietaria:** `demo@crmchapin.gt` / `demo1234`
 - **Vendedor:** `vendedor@crmchapin.gt` / `demo1234`
-- **Clínica (agenda con profesionales y citas de esta semana):**
+- **Clínica (agenda, pacientes, expediente, cobros):**
   `clinica@crmchapin.gt` / `demo1234`
+- **Médico de la clínica:** `medico@crmchapin.gt` / `demo1234`
+- **Reservas en línea de la clínica:** `/reservar/clinica-san-rafael`
 
 `npm run db:seed` borra y recrea las empresas demo, así que no lo corras contra
 una base con información real.
@@ -182,7 +223,14 @@ Cada clínica usa su propio número de WhatsApp Business:
 
    `{{1}}` nombre del paciente · `{{2}}` clínica · `{{3}}` fecha, hora y
    profesional · `{{4}}` enlace del paciente. Opcionalmente, una segunda
-   plantilla con los mismos parámetros para la confirmación al agendar.
+   plantilla con los mismos parámetros para la confirmación al agendar, y
+   una `aviso_control` para el seguimiento:
+
+   ```
+   Hola {{1}}, le escribimos de {{2}}. Ya le toca su {{3}}.
+
+   Puede agendar aquí: {{4}}
+   ```
 3. Generá un token permanente de un usuario del sistema con permiso
    `whatsapp_business_messaging` y cargalo, junto con el *Phone Number ID*, en
    **Configuración → Google y WhatsApp**. Al guardar se verifica contra Meta.
@@ -218,6 +266,7 @@ momento.
 | `npm run build` | Genera el cliente de Prisma y compila para producción. |
 | `npm start` | Sirve la compilación de producción. |
 | `npm run typecheck` | Revisa tipos sin compilar. |
+| `npm test` | Corre las pruebas automáticas (horas, disponibilidad, calendario, WhatsApp). |
 | `npm run db:migrate` | Crea y aplica migraciones en desarrollo. |
 | `npm run db:deploy` | Aplica las migraciones pendientes en producción (usa `DIRECT_URL` si existe). |
 | `npm run db:seed` | Carga los datos de demostración. |
