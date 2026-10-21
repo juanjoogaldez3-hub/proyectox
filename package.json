@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --conditions=react-server --test tests/*.test.ts",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "if [ -n \"$DIRECT_URL\" ]; then DATABASE_URL=\"$DIRECT_URL\" prisma migrate deploy; else prisma migrate deploy; fi",

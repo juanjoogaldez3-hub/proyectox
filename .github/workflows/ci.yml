@@ -1,0 +1,42 @@
+# ============================================================
+#  Revisión automática de cada cambio
+# ============================================================
+#  En cada push y pull request: tipos, pruebas y compilación.
+#  Si algo falla, el cambio no debería unirse.
+# ============================================================
+
+name: Revisión
+
+on:
+  push:
+    branches: [claude/crm-emprendedores-guatemala-cutnut]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # La compilación no se conecta a la base; solo necesita que existan.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      AUTH_SECRET: solo-para-compilar-en-ci-1234567890
+      NEXT_PUBLIC_APP_URL: https://ejemplo.test
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Tipos
+        run: npm run typecheck
+      - name: Pruebas
+        run: npm test
+      - name: Compilación
+        run: npx next build
