@@ -11,6 +11,8 @@ export type DefinicionPlan = {
     productos: number;
     cotizacionesPorMes: number;
     citasPorMes: number;
+    // Meta cobra cada mensaje que inicia el negocio: el plan pone el tope.
+    whatsappPorMes: number;
   };
   beneficios: string[];
 };
@@ -24,13 +26,14 @@ export const PLANES: Record<Plan, DefinicionPlan> = {
     nombre: "Gratis",
     precioMensual: 0,
     descripcion: "Para empezar a ordenar tus clientes sin pagar nada.",
-    limites: { usuarios: 1, contactos: 100, productos: 25, cotizacionesPorMes: 10, citasPorMes: 40 },
+    limites: { usuarios: 1, contactos: 100, productos: 25, cotizacionesPorMes: 10, citasPorMes: 40, whatsappPorMes: 50 },
     beneficios: [
       "1 usuario",
       "Hasta 100 contactos",
       "Embudo de ventas completo",
       "Cotizaciones con IVA y envío por WhatsApp",
       "Agenda de citas (40 al mes)",
+      "50 recordatorios por WhatsApp al mes",
       "Control básico de inventario",
     ],
   },
@@ -45,12 +48,13 @@ export const PLANES: Record<Plan, DefinicionPlan> = {
       productos: 500,
       cotizacionesPorMes: 200,
       citasPorMes: 800,
+      whatsappPorMes: 1000,
     },
     beneficios: [
       "3 usuarios",
       "Hasta 2,000 contactos",
       "Cotizaciones y ventas ilimitadas en la práctica",
-      "800 citas al mes con recordatorios por WhatsApp",
+      "800 citas y 1,000 recordatorios por WhatsApp al mes",
       "Inventario con alertas de stock mínimo",
       "Reportes de ventas por mes y por vendedor",
     ],
@@ -66,10 +70,12 @@ export const PLANES: Record<Plan, DefinicionPlan> = {
       productos: ILIMITADO,
       cotizacionesPorMes: ILIMITADO,
       citasPorMes: ILIMITADO,
+      whatsappPorMes: 5000,
     },
     beneficios: [
       "Hasta 10 usuarios",
       "Contactos, productos y citas ilimitados",
+      "5,000 recordatorios por WhatsApp al mes",
       "Historial completo de actividades",
       "Reportes por vendedor y por etapa",
       "Soporte prioritario por WhatsApp",

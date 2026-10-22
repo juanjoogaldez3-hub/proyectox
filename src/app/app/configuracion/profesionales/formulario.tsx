@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Aviso, Boton, Campo, Tarjeta } from "@/components/ui";
 import { useAccionFormulario } from "@/components/accion-formulario";
@@ -125,9 +126,11 @@ export function FilaProfesional({
   accion,
   calendarios,
   esAdmin,
+  tieneHorario,
 }: {
   id: string;
   activo: boolean;
+  tieneHorario: boolean;
   valores: ValoresProfesional;
   accion: (estado: EstadoAccion, datos: FormData) => Promise<EstadoAccion>;
   calendarios: { id: string; nombre: string }[] | null;
@@ -146,7 +149,12 @@ export function FilaProfesional({
               {valores.nombre}
             </p>
             <p className="truncate text-xs text-tinta-500">
-              {[valores.especialidad, `${valores.duracionMin} min`, calendario && `Google: ${calendario.nombre}`]
+              {[
+                valores.especialidad,
+                `${valores.duracionMin} min`,
+                tieneHorario ? "con horario" : "sin horario",
+                calendario && `Google: ${calendario.nombre}`,
+              ]
                 .filter(Boolean)
                 .join(" · ")}
             </p>
@@ -154,6 +162,12 @@ export function FilaProfesional({
         </div>
         {esAdmin && (
           <div className="flex items-center gap-1">
+            <Link
+              href={`/app/configuracion/profesionales/${id}`}
+              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-marca-600 hover:bg-marca-50"
+            >
+              Horario
+            </Link>
             <Boton type="button" variante="fantasma" tamano="sm" onClick={() => setEditando((v) => !v)}>
               {editando ? "Cerrar" : "Editar"}
             </Boton>

@@ -14,7 +14,8 @@ import {
   primerNombre,
 } from "@/lib/citas";
 import { RespuestaPaciente } from "./respuesta";
-import { cancelarDesdeEnlace, confirmarDesdeEnlace } from "./acciones";
+import { calificarDesdeEnlace, cancelarDesdeEnlace, confirmarDesdeEnlace } from "./acciones";
+import { Calificar } from "./calificar";
 
 // La abre el paciente: nunca debe quedar cacheada ni indexada.
 export const dynamic = "force-dynamic";
@@ -119,6 +120,15 @@ export default async function PaginaCitaPublica({ params }: { params: Promise<{ 
             Esta cita fue cancelada. Si desea una nueva, escríbale a {empresa.nombre}.
           </div>
         )}
+
+        {cita.estado === "COMPLETADA" &&
+          (cita.calificacion ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+              ¡Gracias por calificar su atención!
+            </div>
+          ) : (
+            <Calificar accion={calificarDesdeEnlace.bind(null, token)} />
+          ))}
 
         {puedeResponder && (
           <RespuestaPaciente

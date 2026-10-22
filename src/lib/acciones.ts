@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { LimitePlanError } from "@/lib/limites";
+import { fechaDeFormulario } from "@/lib/gt";
 
 export type EstadoAccion = { error?: string; ok?: boolean } | null;
 
@@ -39,9 +40,14 @@ export const numeroDeFormulario = z
     return Number.isFinite(n) ? n : 0;
   });
 
-export const fechaOpcional = z
-  .string()
-  .trim()
-  .transform((v) => (v === "" ? undefined : new Date(v)))
-  .optional()
-  .refine((v) => v === undefined || !Number.isNaN(v.getTime()), "La fecha no es válida.");
+/** Fecha de un input date o datetime-local, interpretada en hora de Guatemala. */
+export function fechaDeInput(horaPorDefecto = "12:00") {
+  return z
+    .string()
+    .trim()
+    .transform((v) => (v === "" ? undefined : (fechaDeFormulario(v, horaPorDefecto) ?? new Date(NaN))))
+    .optional()
+    .refine((v) => v === undefined || !Number.isNaN(v.getTime()), "La fecha no es válida.");
+}
+
+export const fechaOpcional = fechaDeInput();

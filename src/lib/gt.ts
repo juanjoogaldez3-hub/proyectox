@@ -331,6 +331,18 @@ export function instanteGT(fechaTexto: string, horaTexto: string): Date | null {
   return instante;
 }
 
+/**
+ * Lee lo que manda un `<input type="date">` ("2026-08-12") o un
+ * `datetime-local` ("2026-08-12T15:30") como hora de Guatemala. Sin esto el
+ * servidor, que corre en UTC, guarda la medianoche UTC: una fecha de cierre
+ * aparece un día antes y una actividad de las 3 p. m. queda a las 9 a. m.
+ * A las fechas sin hora se les pone `horaPorDefecto`.
+ */
+export function fechaDeFormulario(texto: string, horaPorDefecto = "12:00"): Date | null {
+  const [fechaTexto, horaTexto] = texto.trim().split("T");
+  return instanteGT(fechaTexto ?? "", horaTexto ?? horaPorDefecto);
+}
+
 /** Lo inverso de `instanteGT`: valores para los inputs de fecha y hora. */
 export function partesLocalesGT(valor: Date): { fecha: string; hora: string } {
   const local = new Date(valor.getTime() - HORAS_DETRAS_DE_UTC * 3_600_000);
@@ -371,4 +383,14 @@ export function diaLargo(valor: Date | string | null | undefined): string {
 /** "martes, 21 de octubre a las 10:30 a. m." — para mensajes al paciente. */
 export function fechaDeCita(valor: Date | string): string {
   return `${diaLargo(valor)} a las ${hora(valor)}`;
+}
+
+/** Años cumplidos a hoy (en Guatemala) para una fecha de nacimiento. */
+export function edad(nacimiento: Date | string | null | undefined, referencia: Date = new Date()): number | null {
+  if (!nacimiento) return null;
+  const n = partesLocalesGT(new Date(nacimiento)).fecha.split("-").map(Number);
+  const h = partesLocalesGT(referencia).fecha.split("-").map(Number);
+  let anos = h[0] - n[0];
+  if (h[1] < n[1] || (h[1] === n[1] && h[2] < n[2])) anos -= 1;
+  return anos >= 0 ? anos : null;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Aviso, Boton, Campo, Tarjeta } from "@/components/ui";
 import type { EstadoAccion } from "@/lib/acciones";
@@ -15,9 +15,16 @@ function BotonCrear() {
   );
 }
 
-export function FormularioUsuario() {
+export function FormularioUsuario({
+  profesionales,
+  esClinica,
+}: {
+  profesionales: { id: string; nombre: string }[];
+  esClinica: boolean;
+}) {
   const [estado, enviar] = useActionState<EstadoAccion, FormData>(crearUsuario, null);
   const formRef = useRef<HTMLFormElement>(null);
+  const [rol, setRol] = useState("VENDEDOR");
 
   useEffect(() => {
     if (estado?.ok) formRef.current?.reset();
@@ -53,11 +60,29 @@ export function FormularioUsuario() {
             <input name="telefono" type="tel" className="campo" placeholder="5555-5555" />
           </Campo>
           <Campo etiqueta="Rol">
-            <select name="rol" defaultValue="VENDEDOR" className="campo">
-              <option value="VENDEDOR">Vendedor — ve y trabaja sus clientes</option>
+            <select name="rol" value={rol} onChange={(e) => setRol(e.target.value)} className="campo">
+              <option value="VENDEDOR">
+                {esClinica ? "Recepción — agenda y atiende pacientes" : "Vendedor — ve y trabaja sus clientes"}
+              </option>
+              <option value="MEDICO">Médico — su agenda y el expediente de los pacientes</option>
               <option value="ADMIN">Administrador — configura y ve todo</option>
             </select>
           </Campo>
+          {rol === "MEDICO" && (
+            <Campo
+              etiqueta="¿Qué profesional de la agenda es? *"
+              ayuda={profesionales.length === 0 ? "Primero agregalo en Configuración → Profesionales." : undefined}
+            >
+              <select name="profesionalId" required className="campo">
+                <option value="">Elegí…</option>
+                {profesionales.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+          )}
           <Campo etiqueta="Contraseña temporal *" ayuda="Mínimo 8 caracteres.">
             <input
               name="password"

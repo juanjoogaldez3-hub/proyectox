@@ -30,6 +30,12 @@ async function usoActual(empresaId: string, recurso: Recurso): Promise<number> {
         where: { empresaId, creadoEl: { gte: inicioMes } },
       });
     }
+    case "whatsappPorMes": {
+      const inicioMes = inicioDelMesGT();
+      return prisma.recordatorio.count({
+        where: { empresaId, enviadoEl: { gte: inicioMes }, estado: { in: ["ENVIADO", "ENTREGADO", "LEIDO"] } },
+      });
+    }
     case "citasPorMes": {
       const inicioMes = inicioDelMesGT();
       return prisma.cita.count({
@@ -45,6 +51,7 @@ const ETIQUETA: Record<Recurso, string> = {
   productos: "productos",
   cotizacionesPorMes: "cotizaciones este mes",
   citasPorMes: "citas agendadas este mes",
+  whatsappPorMes: "mensajes de WhatsApp este mes",
 };
 
 /**
@@ -76,6 +83,7 @@ export async function resumenDeUso(empresaId: string, plan: Plan) {
     "productos",
     "cotizacionesPorMes",
     "citasPorMes",
+    "whatsappPorMes",
   ];
   const conteos = await Promise.all(recursos.map((r) => usoActual(empresaId, r)));
   return recursos.map((recurso, i) => {

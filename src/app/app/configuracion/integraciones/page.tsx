@@ -13,8 +13,12 @@ import {
   FormularioWhatsApp,
   ProbarWhatsApp,
 } from "./formularios";
+import { esAdmin } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Google y WhatsApp" };
+
+const TEXTO_SEGUIMIENTO =
+  "Hola {{1}}, le escribimos de {{2}}. Ya le toca su {{3}}.\n\nPuede agendar aquí: {{4}}";
 
 const TEXTO_PLANTILLA =
   "Hola {{1}}, le recordamos su cita en {{2}} el {{3}}.\n\nConfirme, cancele o agréguela a su calendario aquí: {{4}}\n\nTambién puede responder 1 para confirmar o 2 para cancelar.";
@@ -41,7 +45,7 @@ export default async function PaginaIntegraciones({
 }) {
   const { empresa, usuario } = await requerirSesion();
   const { google: mensajeGoogle } = await searchParams;
-  const esAdmin = usuario.rol !== "VENDEDOR";
+  const puedeAdministrar = esAdmin(usuario.rol);
 
   const [google, whatsapp, enviados7Dias, fallidos7Dias] = await Promise.all([
     prisma.integracionGoogle.findUnique({ where: { empresaId: empresa.id } }),
@@ -74,7 +78,7 @@ export default async function PaginaIntegraciones({
 
   return (
     <div className="space-y-6">
-      {!esAdmin && (
+      {!puedeAdministrar && (
         <Aviso tono="marca">Solo el propietario o un administrador puede cambiar las integraciones.</Aviso>
       )}
 
@@ -107,7 +111,7 @@ export default async function PaginaIntegraciones({
         ) : !google || google.error ? (
           <div className="space-y-2">
             {google?.error && <Aviso tono="peligro">{google.error}</Aviso>}
-            {esAdmin && (
+            {puedeAdministrar && (
               <a
                 href="/api/google/conectar"
                 className="inline-flex items-center gap-2 rounded-lg border border-tinta-300 bg-white px-3.5 py-2 text-sm font-medium text-tinta-700 hover:bg-tinta-50"
@@ -124,10 +128,10 @@ export default async function PaginaIntegraciones({
               <span className="text-tinta-500"> · desde {fechaHora(google.conectadaEl)}</span>
             </p>
             {errorCalendarios && <Aviso tono="peligro">{errorCalendarios}</Aviso>}
-            {esAdmin && calendarios.length > 0 && (
+            {puedeAdministrar && calendarios.length > 0 && (
               <ElegirCalendario calendarios={calendarios} actual={google.calendarioId} />
             )}
-            {esAdmin && <AccionesGoogle />}
+            {puedeAdministrar && <AccionesGoogle />}
           </div>
         )}
       </Tarjeta>
@@ -160,13 +164,14 @@ export default async function PaginaIntegraciones({
           </p>
         )}
 
-        {esAdmin && (
+        {puedeAdministrar && (
           <FormularioWhatsApp
             valores={
               whatsapp && {
                 phoneNumberId: whatsapp.phoneNumberId,
                 plantillaRecordatorio: whatsapp.plantillaRecordatorio,
                 plantillaConfirmacion: whatsapp.plantillaConfirmacion,
+                plantillaSeguimiento: whatsapp.plantillaSeguimiento,
                 idiomaPlantilla: whatsapp.idiomaPlantilla,
                 horasPrimero: whatsapp.horasPrimero,
                 horasSegundo: whatsapp.horasSegundo,
@@ -177,7 +182,7 @@ export default async function PaginaIntegraciones({
           />
         )}
 
-        {esAdmin && whatsapp?.activa && (
+        {puedeAdministrar && whatsapp?.activa && (
           <div className="border-t border-tinta-100 pt-4">
             <h3 className="mb-2 text-sm font-medium text-tinta-800">Probar la plantilla</h3>
             <ProbarWhatsApp />
@@ -205,10 +210,17 @@ export default async function PaginaIntegraciones({
               </span>
             </Paso>
             <Paso n={3}>
+              Opcional: una segunda plantilla <Codigo>aviso_control</Codigo> para avisar que le toca su
+              próximo control:
+              <pre className="mt-2 whitespace-pre-wrap rounded bg-white p-3 font-mono text-xs text-tinta-800">
+                {TEXTO_SEGUIMIENTO}
+              </pre>
+            </Paso>
+            <Paso n={4}>
               Creá un usuario del sistema con permiso <Codigo>whatsapp_business_messaging</Codigo>, generá
               un token permanente y pegalo arriba junto con el Phone Number ID.
             </Paso>
-            <Paso n={4}>
+            <Paso n={5}>
               Para que las respuestas 1 / 2 actualicen la agenda, en la app de Meta → WhatsApp →
               Configuración → Webhook poné la URL <Codigo>{urlBase()}/api/whatsapp/webhook</Codigo>, el
               token de verificación que definió quien administra el servidor y suscribí el campo{" "}
@@ -217,7 +229,7 @@ export default async function PaginaIntegraciones({
           </ol>
         </details>
 
-        {esAdmin && whatsapp && (
+        {puedeAdministrar && whatsapp && (
           <div className="flex justify-end">
             <DesconectarWhatsApp />
           </div>

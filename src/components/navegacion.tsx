@@ -6,12 +6,14 @@ import { useState } from "react";
 import { Icono, type NombreIcono } from "@/components/iconos";
 import { cx } from "@/components/ui";
 
-const SECCIONES: { href: string; texto: string; icono: NombreIcono }[] = [
+type Seccion = { href: string; texto: string; icono: NombreIcono };
+
+const GENERAL: Seccion[] = [
   { href: "/app", texto: "Resumen", icono: "resumen" },
-  { href: "/app/citas", texto: "Agenda", icono: "calendario" },
-  { href: "/app/contactos", texto: "Pacientes y contactos", icono: "contactos" },
+  { href: "/app/contactos", texto: "Contactos", icono: "contactos" },
   { href: "/app/embudo", texto: "Embudo", icono: "embudo" },
   { href: "/app/actividades", texto: "Actividades", icono: "actividades" },
+  { href: "/app/citas", texto: "Agenda", icono: "calendario" },
   { href: "/app/cotizaciones", texto: "Cotizaciones", icono: "cotizaciones" },
   { href: "/app/ventas", texto: "Ventas", icono: "ventas" },
   { href: "/app/productos", texto: "Productos", icono: "productos" },
@@ -19,16 +21,39 @@ const SECCIONES: { href: string; texto: string; icono: NombreIcono }[] = [
   { href: "/app/configuracion", texto: "Configuración", icono: "configuracion" },
 ];
 
+/** Una clínica no usa embudo ni cotizaciones; las ventas son los cobros de consultas. */
+const CLINICA: Seccion[] = [
+  { href: "/app", texto: "Resumen", icono: "resumen" },
+  { href: "/app/citas", texto: "Agenda", icono: "calendario" },
+  { href: "/app/pacientes", texto: "Pacientes", icono: "contactos" },
+  { href: "/app/actividades", texto: "Pendientes", icono: "actividades" },
+  { href: "/app/ventas", texto: "Cobros", icono: "ventas" },
+  { href: "/app/productos", texto: "Servicios y productos", icono: "productos" },
+  { href: "/app/reportes", texto: "Reportes", icono: "reportes" },
+  { href: "/app/configuracion", texto: "Configuración", icono: "configuracion" },
+];
+
+const MEDICO: Seccion[] = [
+  { href: "/app", texto: "Resumen", icono: "resumen" },
+  { href: "/app/citas", texto: "Mi agenda", icono: "calendario" },
+  { href: "/app/pacientes", texto: "Pacientes", icono: "contactos" },
+  { href: "/app/configuracion", texto: "Mi cuenta", icono: "configuracion" },
+];
+
+export type MenuApp = "GENERAL" | "CLINICA" | "MEDICO";
+
+const MENUS: Record<MenuApp, Seccion[]> = { GENERAL, CLINICA, MEDICO };
+
 function estaActiva(pathname: string, href: string): boolean {
   // "/app" solo se marca en la raíz; el resto también con sus subrutas.
   return href === "/app" ? pathname === "/app" : pathname.startsWith(href);
 }
 
-function Enlaces({ alNavegar }: { alNavegar?: () => void }) {
+function Enlaces({ menu, alNavegar }: { menu: MenuApp; alNavegar?: () => void }) {
   const pathname = usePathname();
   return (
     <nav className="space-y-0.5">
-      {SECCIONES.map((s) => {
+      {MENUS[menu].map((s) => {
         const activa = estaActiva(pathname, s.href);
         return (
           <Link
@@ -52,7 +77,7 @@ function Enlaces({ alNavegar }: { alNavegar?: () => void }) {
   );
 }
 
-export function NavegacionLateral() {
+export function NavegacionLateral({ menu }: { menu: MenuApp }) {
   return (
     <div className="hidden w-60 shrink-0 border-r border-tinta-200 bg-white lg:block">
       <div className="sticky top-0 p-3">
@@ -65,13 +90,13 @@ export function NavegacionLateral() {
           </span>
           CRM Chapín
         </Link>
-        <Enlaces />
+        <Enlaces menu={menu} />
       </div>
     </div>
   );
 }
 
-export function NavegacionMovil() {
+export function NavegacionMovil({ menu }: { menu: MenuApp }) {
   const [abierto, setAbierto] = useState(false);
 
   return (
@@ -97,7 +122,7 @@ export function NavegacionMovil() {
       </button>
       {abierto && (
         <div className="absolute inset-x-0 top-full z-30 border-b border-tinta-200 bg-white p-3 shadow-lg">
-          <Enlaces alNavegar={() => setAbierto(false)} />
+          <Enlaces menu={menu} alNavegar={() => setAbierto(false)} />
         </div>
       )}
     </div>

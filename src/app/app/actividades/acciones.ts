@@ -6,19 +6,14 @@ import { z } from "zod";
 import { TipoActividad } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requerirSesion } from "@/lib/auth";
-import { comoError, textoOpcional, type EstadoAccion } from "@/lib/acciones";
+import { comoError, fechaDeInput, textoOpcional, type EstadoAccion } from "@/lib/acciones";
 
 const esquema = z.object({
   tipo: z.nativeEnum(TipoActividad).default("TAREA"),
   titulo: z.string().trim().min(2, "Escribí qué hay que hacer."),
   detalle: textoOpcional,
-  // datetime-local llega como "2026-08-12T15:30"; el navegador ya usa la hora local.
-  venceEl: z
-    .string()
-    .trim()
-    .transform((v) => (v === "" ? undefined : new Date(v)))
-    .optional()
-    .refine((v) => v === undefined || !Number.isNaN(v.getTime()), "La fecha no es válida."),
+  // datetime-local llega como "2026-08-12T15:30", sin zona: es hora de Guatemala.
+  venceEl: fechaDeInput(),
   contactoId: textoOpcional,
   oportunidadId: textoOpcional,
 });

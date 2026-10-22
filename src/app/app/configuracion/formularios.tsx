@@ -27,6 +27,7 @@ export function FormularioEmpresa({
     departamento: string | null;
     municipio: string | null;
     ivaPorcentaje: number;
+    giro: "GENERAL" | "CLINICA";
   };
 }) {
   const [estado, enviar] = useActionState<EstadoAccion, FormData>(actualizarEmpresa, null);
@@ -89,6 +90,15 @@ export function FormularioEmpresa({
           </Campo>
           <Campo etiqueta="Municipio">
             <input name="municipio" defaultValue={valores.municipio ?? ""} className="campo" />
+          </Campo>
+          <Campo
+            etiqueta="Tipo de negocio"
+            ayuda="Una clínica ve Agenda, Pacientes y Cobros en lugar de Embudo y Cotizaciones. No se borra nada al cambiarlo."
+          >
+            <select name="giro" defaultValue={valores.giro} className="campo">
+              <option value="GENERAL">Negocio o empresa</option>
+              <option value="CLINICA">Clínica o consultorio</option>
+            </select>
           </Campo>
           <Campo
             etiqueta="IVA (%)"

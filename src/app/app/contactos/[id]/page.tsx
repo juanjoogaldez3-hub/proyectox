@@ -114,6 +114,9 @@ export default async function PaginaContacto({
             contactoId={contacto.id}
             resumen="Le escribiste por WhatsApp desde su ficha"
           />
+          <BotonEnlace href={`/app/pacientes/${contacto.id}`} variante="secundario">
+            Ficha de paciente
+          </BotonEnlace>
           <BotonEnlace href={`/app/citas/nueva?paciente=${contacto.id}`}>
             <Icono nombre="calendario" /> Agendar cita
           </BotonEnlace>

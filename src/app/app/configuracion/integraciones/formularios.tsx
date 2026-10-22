@@ -104,6 +104,7 @@ export type ValoresWhatsApp = {
   phoneNumberId: string;
   plantillaRecordatorio: string;
   plantillaConfirmacion: string | null;
+  plantillaSeguimiento: string | null;
   idiomaPlantilla: string;
   horasPrimero: number;
   horasSegundo: number;
@@ -156,6 +157,14 @@ export function FormularioWhatsApp({ valores }: { valores: ValoresWhatsApp | nul
             defaultValue={valores?.plantillaConfirmacion ?? ""}
             className="campo font-mono"
             placeholder="confirmacion_cita"
+          />
+        </Campo>
+        <Campo etiqueta="Plantilla de aviso de control" ayuda="Opcional. Para avisar que le toca su próximo control.">
+          <input
+            name="plantillaSeguimiento"
+            defaultValue={valores?.plantillaSeguimiento ?? ""}
+            className="campo font-mono"
+            placeholder="aviso_control"
           />
         </Campo>
         <Campo etiqueta="Idioma de las plantillas">

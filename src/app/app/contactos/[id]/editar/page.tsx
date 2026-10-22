@@ -6,6 +6,7 @@ import { EncabezadoPagina } from "@/components/ui";
 import { FormularioContacto } from "../../formulario";
 import { actualizarContacto } from "../../acciones";
 import { BotonEliminarContacto } from "./eliminar";
+import { esAdmin } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Editar contacto" };
 
@@ -37,7 +38,7 @@ export default async function PaginaEditarContacto({
         usuarios={usuarios}
         cancelarHref={`/app/contactos/${contacto.id}`}
       />
-      {usuario.rol !== "VENDEDOR" && (
+      {esAdmin(usuario.rol) && (
         <div className="mt-8 rounded-xl border border-red-200 bg-red-50 p-4">
           <h2 className="text-sm font-semibold text-red-800">Eliminar contacto</h2>
           <p className="mt-1 text-sm text-red-700">

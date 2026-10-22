@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import type { Empresa } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { planEfectivo, pruebaVigente, suscripcionVigente } from "@/lib/planes";
+import { esAdmin } from "@/lib/roles";
 
 export const COOKIE_SESION = "crm_sesion";
 const DURACION_SESION_SEG = 60 * 60 * 24 * 30; // 30 dias
@@ -118,7 +119,7 @@ export async function requerirSesion(): Promise<Sesion> {
 
 export async function requerirAdmin(): Promise<Sesion> {
   const sesion = await requerirSesion();
-  if (sesion.usuario.rol === "VENDEDOR") {
+  if (!esAdmin(sesion.usuario.rol)) {
     throw new Error("Solo el propietario o un administrador puede hacer este cambio.");
   }
   return sesion;

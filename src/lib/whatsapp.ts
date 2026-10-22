@@ -31,6 +31,7 @@ export type ConfigWhatsApp = {
   token: string;
   plantillaRecordatorio: string;
   plantillaConfirmacion: string | null;
+  plantillaSeguimiento: string | null;
   idiomaPlantilla: string;
   enviarConfirmacion: boolean;
   horasPrimero: number;
@@ -46,6 +47,7 @@ export async function configWhatsApp(empresaId: string): Promise<ConfigWhatsApp 
     token: descifrar(integracion.accessTokenCifrado),
     plantillaRecordatorio: integracion.plantillaRecordatorio,
     plantillaConfirmacion: integracion.plantillaConfirmacion,
+    plantillaSeguimiento: integracion.plantillaSeguimiento,
     idiomaPlantilla: integracion.idiomaPlantilla,
     enviarConfirmacion: integracion.enviarConfirmacion,
     horasPrimero: integracion.horasPrimero,

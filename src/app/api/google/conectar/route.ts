@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { sesionActual } from "@/lib/auth";
 import { COOKIE_ESTADO_GOOGLE, googleConfigurado, urlAutorizacionGoogle } from "@/lib/google";
+import { esAdmin } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export async function GET(request: Request) {
   if (!sesion) return Response.redirect(new URL("/ingresar", request.url), 303);
 
   const volver = new URL("/app/configuracion/integraciones", request.url);
-  if (sesion.usuario.rol === "VENDEDOR") {
+  if (!esAdmin(sesion.usuario.rol)) {
     volver.searchParams.set("google", "Solo el propietario o un administrador puede conectar Google.");
     return Response.redirect(volver, 303);
   }

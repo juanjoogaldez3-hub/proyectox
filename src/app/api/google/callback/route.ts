@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { sesionActual } from "@/lib/auth";
 import { COOKIE_ESTADO_GOOGLE, conectarCuentaGoogle } from "@/lib/google";
 import { mismoSecreto } from "@/lib/secretos";
+import { esAdmin } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
 
   const sesion = await sesionActual();
   if (!sesion) return Response.redirect(new URL("/ingresar", request.url), 303);
-  if (sesion.usuario.rol === "VENDEDOR") {
+  if (!esAdmin(sesion.usuario.rol)) {
     return terminar("Solo el propietario o un administrador puede conectar Google.");
   }
 

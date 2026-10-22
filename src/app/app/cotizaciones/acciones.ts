@@ -8,7 +8,7 @@ import { EstadoCotizacion, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requerirSesion } from "@/lib/auth";
 import { verificarLimite } from "@/lib/limites";
-import { comoError, textoOpcional, type EstadoAccion } from "@/lib/acciones";
+import { comoError, fechaDeInput, textoOpcional, type EstadoAccion } from "@/lib/acciones";
 import { IVA_GUATEMALA, aNumero, calcularTotales, redondear } from "@/lib/gt";
 
 const esquemaItem = z.object({
@@ -21,12 +21,8 @@ const esquemaItem = z.object({
 const esquema = z.object({
   contactoId: z.string().trim().min(1, "Elegí a quién le vas a cotizar."),
   oportunidadId: textoOpcional,
-  validaHasta: z
-    .string()
-    .trim()
-    .transform((v) => (v === "" ? undefined : new Date(v)))
-    .optional()
-    .refine((v) => v === undefined || !Number.isNaN(v.getTime()), "La fecha no es válida."),
+  // Vale hasta el final de ese día, no hasta la medianoche anterior.
+  validaHasta: fechaDeInput("23:59"),
   descuento: z.number().min(0, "El descuento no puede ser negativo."),
   notas: textoOpcional,
   condiciones: textoOpcional,

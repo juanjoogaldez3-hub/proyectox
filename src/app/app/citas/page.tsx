@@ -7,10 +7,12 @@ import { BotonEnlace, EncabezadoPagina, EstadoVacio, Insignia, Tarjeta, cx } fro
 import { Icono } from "@/components/iconos";
 import { diaLargo, hora, hoyEnGuatemala, inicioDelDiaGT, partesLocalesGT } from "@/lib/gt";
 import { ESTADOS_CITA } from "@/lib/citas";
+import { tramosDeLaFecha } from "@/lib/disponibilidad";
+import { GrillaDia, type ColumnaGrilla } from "./grilla";
 
 export const metadata: Metadata = { title: "Agenda" };
 
-type Vista = "dia" | "semana";
+type Vista = "dia" | "lista" | "semana";
 
 const DIA_MS = 86_400_000;
 
@@ -34,9 +36,9 @@ export default async function PaginaAgenda({
 }: {
   searchParams: Promise<{ fecha?: string; vista?: string; profesional?: string }>;
 }) {
-  const { empresa } = await requerirSesion();
+  const { empresa, usuario } = await requerirSesion();
   const filtros = await searchParams;
-  const vista: Vista = filtros.vista === "semana" ? "semana" : "dia";
+  const vista: Vista = filtros.vista === "semana" || filtros.vista === "lista" ? filtros.vista : "dia";
   const { ano, mes, dia } = leerFecha(filtros.fecha);
 
   // La semana arranca el lunes, como en los consultorios de acá.
@@ -44,16 +46,26 @@ export default async function PaginaAgenda({
   const desplazamiento = vista === "semana" ? (diaSemana + 6) % 7 : 0;
   const desde = inicioDelDiaGT(ano, mes, dia - desplazamiento);
   const dias = vista === "semana" ? 7 : 1;
+  const fechaTexto = textoFecha(desde);
   const hasta = new Date(desde.getTime() + dias * DIA_MS);
 
   const profesionales = await prisma.profesional.findMany({
     where: { empresaId: empresa.id, activo: true },
-    select: { id: true, nombre: true, color: true },
+    select: {
+      id: true,
+      nombre: true,
+      color: true,
+      horarios: { select: { diaSemana: true, desde: true, hasta: true } },
+    },
     orderBy: { nombre: "asc" },
   });
-  const profesionalId = profesionales.some((p) => p.id === filtros.profesional)
-    ? filtros.profesional
-    : undefined;
+  // El médico ve solo su agenda.
+  const esMedico = usuario.rol === "MEDICO";
+  const profesionalId = esMedico
+    ? (usuario.profesionalId ?? "ninguno")
+    : profesionales.some((p) => p.id === filtros.profesional)
+      ? filtros.profesional
+      : undefined;
 
   const donde: Prisma.CitaWhereInput = {
     empresaId: empresa.id,
@@ -75,6 +87,53 @@ export default async function PaginaAgenda({
       },
     },
   });
+
+  const bloqueos =
+    vista === "dia"
+      ? await prisma.bloqueoAgenda.findMany({
+          where: {
+            empresaId: empresa.id,
+            inicio: { lt: hasta },
+            fin: { gt: desde },
+            ...(profesionalId ? { OR: [{ profesionalId }, { profesionalId: null }] } : {}),
+          },
+        })
+      : [];
+
+  // Columnas de la cuadrícula: los profesionales visibles y, si hay citas sin
+  // asignar ese día, una columna para ellas.
+  const visiblesProf = profesionales.filter((p) => !profesionalId || p.id === profesionalId);
+  const columnas: ColumnaGrilla[] = visiblesProf.map((p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    color: p.color,
+    tramos: tramosDeLaFecha(p.horarios, fechaTexto),
+    bloqueos: bloqueos
+      .filter((b) => b.profesionalId === null || b.profesionalId === p.id)
+      .map((b) => ({ inicio: b.inicio, fin: b.fin, motivo: b.motivo })),
+    citas: citas
+      .filter((c) => c.profesionalId === p.id)
+      .map((c) => ({ id: c.id, inicio: c.inicio, fin: c.fin, paciente: c.contacto.nombre, motivo: c.motivo, estado: c.estado })),
+  }));
+  const sinAsignar = citas.filter((c) => !c.profesionalId);
+  if (sinAsignar.length > 0 && !esMedico) {
+    columnas.push({
+      id: null,
+      nombre: "Sin asignar",
+      color: "var(--color-tinta-300)",
+      tramos: [],
+      bloqueos: [],
+      citas: sinAsignar.map((c) => ({ id: c.id, inicio: c.inicio, fin: c.fin, paciente: c.contacto.nombre, motivo: c.motivo, estado: c.estado })),
+    });
+  }
+  // La cuadrícula va del primer horario (o cita) al último, redondeado a la hora.
+  const minutosDesdeInicio = (d: Date) => (d.getTime() - desde.getTime()) / 60_000;
+  const marcas = [
+    ...columnas.flatMap((c) => c.tramos.flatMap((t) => [minutosDesdeInicio(t.inicio), minutosDesdeInicio(t.fin)])),
+    ...citas.flatMap((c) => [minutosDesdeInicio(c.inicio), minutosDesdeInicio(c.fin)]),
+  ];
+  const desdeMin = Math.max(0, Math.floor(Math.min(7 * 60, ...marcas) / 60) * 60);
+  const hastaMin = Math.min(24 * 60, Math.ceil(Math.max(19 * 60, ...marcas) / 60) * 60);
 
   const vigentes = citas.filter((c) => c.estado !== "CANCELADA");
   const porConfirmar = citas.filter((c) => c.estado === "PROGRAMADA").length;
@@ -104,9 +163,9 @@ export default async function PaginaAgenda({
   return (
     <>
       <EncabezadoPagina
-        titulo="Agenda"
+        titulo={esMedico ? "Mi agenda" : "Agenda"}
         descripcion={
-          vista === "dia"
+          vista !== "semana"
             ? diaLargo(desde)
             : `Semana del ${diaLargo(desde)} al ${diaLargo(new Date(hasta.getTime() - 1))}`
         }
@@ -142,7 +201,7 @@ export default async function PaginaAgenda({
         </div>
 
         <div className="flex rounded-lg border border-tinta-200 bg-white p-0.5">
-          {(["dia", "semana"] as const).map((v) => (
+          {(["dia", "lista", "semana"] as const).map((v) => (
             <Link
               key={v}
               href={enlace({ vista: v })}
@@ -151,12 +210,12 @@ export default async function PaginaAgenda({
                 vista === v ? "bg-marca-50 font-medium text-marca-700" : "text-tinta-600 hover:bg-tinta-50",
               )}
             >
-              {v === "dia" ? "Día" : "Semana"}
+              {v === "dia" ? "Día" : v === "lista" ? "Lista" : "Semana"}
             </Link>
           ))}
         </div>
 
-        {profesionales.length > 1 && (
+        {profesionales.length > 1 && !esMedico && (
           <div className="flex flex-wrap gap-1.5">
             <Link
               href={enlace({ profesional: null })}
@@ -195,7 +254,15 @@ export default async function PaginaAgenda({
         </p>
       )}
 
-      {citas.length === 0 && vista === "dia" ? (
+      {vista === "dia" && columnas.length > 0 ? (
+        <GrillaDia
+          inicioDia={desde}
+          desdeMin={desdeMin}
+          hastaMin={hastaMin}
+          columnas={columnas}
+          fecha={fechaTexto}
+        />
+      ) : citas.length === 0 && vista !== "semana" ? (
         <EstadoVacio
           titulo="No hay citas este día"
           descripcion="Agendá una y el paciente recibe la confirmación y sus recordatorios por WhatsApp."

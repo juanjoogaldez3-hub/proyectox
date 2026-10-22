@@ -30,59 +30,83 @@ enum EstadoSuscripcion {
 enum Rol {
   PROPIETARIO
   ADMIN
+  // En una clínica es la recepción.
   VENDEDOR
+  // Ve su propia agenda y el expediente de los pacientes.
+  MEDICO
+}
+
+/**
+ * Cambia el vocabulario y el menú: una clínica no tiene "embudo" ni "cotizaciones".
+ */
+enum Giro {
+  GENERAL
+  CLINICA
 }
 
 model Empresa {
-  id                String            @id @default(cuid())
-  nombre            String
-  slug              String            @unique
-  nit               String?
-  telefono          String?
-  direccion         String?
-  departamento      String?
-  municipio         String?
-  logoUrl           String?
+  id                        String            @id @default(cuid())
+  nombre                    String
+  slug                      String            @unique
+  nit                       String?
+  telefono                  String?
+  direccion                 String?
+  departamento              String?
+  municipio                 String?
+  logoUrl                   String?
   // Impuesto sobre ventas: en Guatemala el IVA general es 12%.
-  ivaPorcentaje     Decimal           @default(12) @db.Decimal(5, 2)
-  moneda            String            @default("GTQ")
-  plan              Plan              @default(GRATIS)
-  estadoSuscripcion EstadoSuscripcion @default(PRUEBA)
-  pruebaTermina     DateTime?
-  planRenuevaEl     DateTime?
-  creadoEl          DateTime          @default(now())
-  actualizadoEl     DateTime          @updatedAt
+  ivaPorcentaje             Decimal           @default(12) @db.Decimal(5, 2)
+  moneda                    String            @default("GTQ")
+  giro                      Giro              @default(GENERAL)
+  // Página pública /reservar/<slug> donde los pacientes agendan solos.
+  reservasActivas           Boolean           @default(false)
+  // Horas mínimas de anticipación y días hacia adelante que se pueden reservar.
+  reservasAnticipacionHoras Int               @default(2)
+  reservasDiasMax           Int               @default(30)
+  plan                      Plan              @default(GRATIS)
+  estadoSuscripcion         EstadoSuscripcion @default(PRUEBA)
+  pruebaTermina             DateTime?
+  planRenuevaEl             DateTime?
+  creadoEl                  DateTime          @default(now())
+  actualizadoEl             DateTime          @updatedAt
 
-  usuarios      Usuario[]
-  contactos     Contacto[]
-  etapas        EtapaEmbudo[]
-  oportunidades Oportunidad[]
-  actividades   Actividad[]
-  notas         Nota[]
-  productos     Producto[]
-  movimientos   MovimientoInventario[]
-  cotizaciones  Cotizacion[]
-  ventas        Venta[]
-  pagos         PagoSuscripcion[]
-  profesionales Profesional[]
-  citas         Cita[]
-  recordatorios Recordatorio[]
-  google        IntegracionGoogle?
-  whatsapp      IntegracionWhatsApp?
+  usuarios          Usuario[]
+  contactos         Contacto[]
+  etapas            EtapaEmbudo[]
+  oportunidades     Oportunidad[]
+  actividades       Actividad[]
+  notas             Nota[]
+  productos         Producto[]
+  movimientos       MovimientoInventario[]
+  cotizaciones      Cotizacion[]
+  ventas            Venta[]
+  pagos             PagoSuscripcion[]
+  profesionales     Profesional[]
+  citas             Cita[]
+  recordatorios     Recordatorio[]
+  google            IntegracionGoogle?
+  whatsapp          IntegracionWhatsApp?
+  bloqueos          BloqueoAgenda[]
+  tiposConsulta     TipoConsulta[]
+  notasClinicas     NotaClinica[]
+  accesosExpediente AccesoExpediente[]
 }
 
 model Usuario {
-  id           String    @id @default(cuid())
-  empresaId    String
-  empresa      Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  nombre       String
-  email        String    @unique
-  passwordHash String
-  telefono     String?
-  rol          Rol       @default(VENDEDOR)
-  activo       Boolean   @default(true)
-  ultimoAcceso DateTime?
-  creadoEl     DateTime  @default(now())
+  id            String       @id @default(cuid())
+  empresaId     String
+  empresa       Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nombre        String
+  email         String       @unique
+  passwordHash  String
+  telefono      String?
+  rol           Rol          @default(VENDEDOR)
+  // Para el rol MEDICO: el profesional de la agenda que es esta persona.
+  profesionalId String?      @unique
+  profesional   Profesional? @relation(fields: [profesionalId], references: [id], onDelete: SetNull)
+  activo        Boolean      @default(true)
+  ultimoAcceso  DateTime?
+  creadoEl      DateTime     @default(now())
 
   contactosAsignados Contacto[]             @relation("ContactoResponsable")
   oportunidades      Oportunidad[]
@@ -93,6 +117,8 @@ model Usuario {
   ventas             Venta[]
   tokensRecuperacion TokenRecuperacion[]
   citasCreadas       Cita[]
+  notasClinicas      NotaClinica[]
+  accesosExpediente  AccesoExpediente[]
 
   @@index([empresaId])
 }
@@ -148,36 +174,51 @@ enum OrigenContacto {
 }
 
 model Contacto {
-  id            String         @id @default(cuid())
-  empresaId     String
-  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  nombre        String
-  negocio       String?
-  email         String?
-  telefono      String?
+  id                         String         @id @default(cuid())
+  empresaId                  String
+  empresa                    Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nombre                     String
+  negocio                    String?
+  email                      String?
+  telefono                   String?
   // Se guarda en formato internacional (502XXXXXXXX) para armar enlaces wa.me.
-  whatsapp      String?
-  nit           String?
-  direccion     String?
-  departamento  String?
-  municipio     String?
-  origen        OrigenContacto @default(WHATSAPP)
-  etiquetas     String[]       @default([])
-  notas         String?
-  responsableId String?
-  responsable   Usuario?       @relation("ContactoResponsable", fields: [responsableId], references: [id], onDelete: SetNull)
-  creadoEl      DateTime       @default(now())
-  actualizadoEl DateTime       @updatedAt
+  whatsapp                   String?
+  nit                        String?
+  direccion                  String?
+  departamento               String?
+  municipio                  String?
+  origen                     OrigenContacto @default(WHATSAPP)
+  etiquetas                  String[]       @default([])
+  notas                      String?
+  // Datos de paciente (clínicas). Todos opcionales.
+  fechaNacimiento            DateTime?
+  dpi                        String?
+  sexo                       String?
+  tipoSangre                 String?
+  seguroMedico               String?
+  alergias                   String?
+  antecedentes               String?
+  contactoEmergenciaNombre   String?
+  contactoEmergenciaTelefono String?
+  // Cuándo autorizó el paciente el manejo de sus datos de salud.
+  consentimientoEl           DateTime?
+  responsableId              String?
+  responsable                Usuario?       @relation("ContactoResponsable", fields: [responsableId], references: [id], onDelete: SetNull)
+  creadoEl                   DateTime       @default(now())
+  actualizadoEl              DateTime       @updatedAt
 
-  oportunidades Oportunidad[]
-  actividades   Actividad[]
-  notasRel      Nota[]
-  cotizaciones  Cotizacion[]
-  ventas        Venta[]
-  citas         Cita[]
+  oportunidades     Oportunidad[]
+  actividades       Actividad[]
+  notasRel          Nota[]
+  cotizaciones      Cotizacion[]
+  ventas            Venta[]
+  citas             Cita[]
+  notasClinicas     NotaClinica[]
+  accesosExpediente AccesoExpediente[]
 
   @@index([empresaId])
   @@index([empresaId, nombre])
+  @@index([empresaId, whatsapp])
 }
 
 model EtapaEmbudo {
@@ -434,6 +475,7 @@ model Venta {
   creadoEl      DateTime    @default(now())
 
   items VentaItem[]
+  cita  Cita?
 
   @@unique([empresaId, numero])
   @@index([empresaId])
@@ -479,9 +521,72 @@ model Profesional {
   activo       Boolean  @default(true)
   creadoEl     DateTime @default(now())
 
+  citas         Cita[]
+  horarios      HorarioProfesional[]
+  bloqueos      BloqueoAgenda[]
+  usuario       Usuario?
+  notasClinicas NotaClinica[]
+
+  @@index([empresaId])
+}
+
+/**
+ * Tramo de atención semanal: un médico puede tener varios por día (mañana y tarde).
+ */
+model HorarioProfesional {
+  id            String      @id @default(cuid())
+  profesionalId String
+  profesional   Profesional @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
+  // 0 = domingo … 6 = sábado, como Date.getDay().
+  diaSemana     Int
+  // "08:00" y "12:30", hora de Guatemala.
+  desde         String
+  hasta         String
+
+  @@index([profesionalId])
+}
+
+/**
+ * Vacaciones, almuerzo, congreso… Sin profesional, bloquea a toda la clínica.
+ */
+model BloqueoAgenda {
+  id            String       @id @default(cuid())
+  empresaId     String
+  empresa       Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  profesionalId String?
+  profesional   Profesional? @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
+  inicio        DateTime
+  fin           DateTime
+  motivo        String
+  creadoEl      DateTime     @default(now())
+
+  @@index([empresaId, inicio])
+}
+
+/**
+ * Servicio que ofrece la clínica: duración, precio y si se reserva en línea.
+ */
+model TipoConsulta {
+  id             String   @id @default(cuid())
+  empresaId      String
+  empresa        Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nombre         String
+  duracionMin    Int      @default(30)
+  precio         Decimal  @default(0) @db.Decimal(12, 2)
+  reservable     Boolean  @default(true)
+  // Quiénes lo atienden; vacío = cualquier profesional.
+  profesionalIds String[] @default([])
+  activo         Boolean  @default(true)
+  creadoEl       DateTime @default(now())
+
   citas Cita[]
 
   @@index([empresaId])
+}
+
+enum OrigenCita {
+  RECEPCION
+  EN_LINEA
 }
 
 enum EstadoCita {
@@ -493,28 +598,37 @@ enum EstadoCita {
 }
 
 model Cita {
-  id                String       @id @default(cuid())
-  empresaId         String
-  empresa           Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  contactoId        String
-  contacto          Contacto     @relation(fields: [contactoId], references: [id], onDelete: Cascade)
-  profesionalId     String?
-  profesional       Profesional? @relation(fields: [profesionalId], references: [id], onDelete: SetNull)
-  inicio            DateTime
-  fin               DateTime
-  motivo            String
-  notas             String?
-  estado            EstadoCita   @default(PROGRAMADA)
+  id                 String        @id @default(cuid())
+  empresaId          String
+  empresa            Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contactoId         String
+  contacto           Contacto      @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  profesionalId      String?
+  profesional        Profesional?  @relation(fields: [profesionalId], references: [id], onDelete: SetNull)
+  inicio             DateTime
+  fin                DateTime
+  motivo             String
+  notas              String?
+  estado             EstadoCita    @default(PROGRAMADA)
   // Enlace que recibe el paciente para ver, confirmar o cancelar su cita.
-  tokenPublico      String       @unique
-  confirmadaEl      DateTime?
+  tokenPublico       String        @unique
+  confirmadaEl       DateTime?
   // Quien confirmo: "paciente (enlace)", "paciente (WhatsApp)" o el usuario.
-  confirmadaPor     String?
-  canceladaEl       DateTime?
-  motivoCancelacion String?
+  confirmadaPor      String?
+  canceladaEl        DateTime?
+  motivoCancelacion  String?
   // Si es true y el paciente tiene correo, Google le manda la invitacion y la
   // cita aparece sola en su calendario.
-  invitarPaciente   Boolean      @default(true)
+  invitarPaciente    Boolean       @default(true)
+  tipoConsultaId     String?
+  tipoConsulta       TipoConsulta? @relation(fields: [tipoConsultaId], references: [id], onDelete: SetNull)
+  origen             OrigenCita    @default(RECEPCION)
+  // Cobro de la consulta: se registra como venta para que salga en reportes.
+  ventaId            String?       @unique
+  venta              Venta?        @relation(fields: [ventaId], references: [id], onDelete: SetNull)
+  // Lo que el paciente contesta en su enlace después de la consulta.
+  calificacion       Int?
+  comentarioPaciente String?
 
   // Sincronizacion con Google Calendar de la clinica.
   googleEventoId       String?
@@ -528,6 +642,7 @@ model Cita {
   actualizadoEl DateTime @updatedAt
 
   recordatorios Recordatorio[]
+  notasClinicas NotaClinica[]
 
   @@index([empresaId, inicio])
   @@index([contactoId])
@@ -538,6 +653,8 @@ enum TipoRecordatorio {
   CONFIRMACION
   PRIMERO
   SEGUNDO
+  // Después de atendida: "le toca su control".
+  SEGUIMIENTO
 }
 
 enum EstadoRecordatorio {
@@ -568,6 +685,8 @@ model Recordatorio {
   // wamid que devuelve la API de WhatsApp; con el se emparejan los avisos de
   // entregado y leido que llegan al webhook.
   mensajeId      String?            @unique
+  // Para el aviso de control: qué le toca ("Control de presión").
+  nota           String?
   error          String?
   creadoEl       DateTime           @default(now())
   actualizadoEl  DateTime           @updatedAt
@@ -611,6 +730,7 @@ model IntegracionWhatsApp {
   nombreVerificado      String?
   plantillaRecordatorio String   @default("recordatorio_cita")
   plantillaConfirmacion String?
+  plantillaSeguimiento  String?
   idiomaPlantilla       String   @default("es")
   activa                Boolean  @default(true)
   enviarConfirmacion    Boolean  @default(true)
@@ -618,4 +738,54 @@ model IntegracionWhatsApp {
   horasPrimero          Int      @default(24)
   horasSegundo          Int      @default(2)
   actualizadoEl         DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Expediente clínico
+// ---------------------------------------------------------------------------
+
+/**
+ * Nota de una consulta: lo que vio el médico y lo que indicó.
+ */
+model NotaClinica {
+  id            String       @id @default(cuid())
+  empresaId     String
+  empresa       Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contactoId    String
+  contacto      Contacto     @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  citaId        String?
+  cita          Cita?        @relation(fields: [citaId], references: [id], onDelete: SetNull)
+  profesionalId String?
+  profesional   Profesional? @relation(fields: [profesionalId], references: [id], onDelete: SetNull)
+  usuarioId     String
+  usuario       Usuario      @relation(fields: [usuarioId], references: [id])
+  motivo        String?
+  // Signos vitales como texto: cada clínica los anota a su manera ("120/80").
+  presion       String?
+  pesoKg        String?
+  tallaCm       String?
+  temperatura   String?
+  diagnostico   String?
+  tratamiento   String?
+  receta        String?
+  creadoEl      DateTime     @default(now())
+
+  @@index([empresaId, contactoId])
+}
+
+/**
+ * Bitácora de quién abrió o escribió el expediente de cada paciente.
+ */
+model AccesoExpediente {
+  id         String   @id @default(cuid())
+  empresaId  String
+  empresa    Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  contactoId String
+  contacto   Contacto @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  usuarioId  String
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  accion     String
+  creadoEl   DateTime @default(now())
+
+  @@index([empresaId, contactoId, creadoEl])
 }

@@ -30,6 +30,13 @@ export function FormularioRegistro() {
         />
       </Campo>
 
+      <Campo etiqueta="¿Qué tipo de negocio es?">
+        <select name="giro" defaultValue="GENERAL" className="campo">
+          <option value="GENERAL">Negocio o empresa (clientes, ventas, inventario)</option>
+          <option value="CLINICA">Clínica o consultorio (pacientes y agenda de citas)</option>
+        </select>
+      </Campo>
+
       <Campo etiqueta="Tu nombre">
         <input name="nombre" required className="campo" placeholder="María López" />
       </Campo>

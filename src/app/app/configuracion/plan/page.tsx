@@ -6,12 +6,13 @@ import { Aviso, Insignia, Tarjeta } from "@/components/ui";
 import { ILIMITADO, PLANES, diasRestantesDePrueba, formatoLimite } from "@/lib/planes";
 import { aNumero, fecha, quetzales } from "@/lib/gt";
 import { FormularioPago } from "./formulario";
+import { esAdmin } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Plan y pagos" };
 
 export default async function PaginaPlan() {
   const { empresa, usuario, plan } = await requerirSesion();
-  const esAdmin = usuario.rol !== "VENDEDOR";
+  const puedeAdministrar = esAdmin(usuario.rol);
 
   const [uso, pagos] = await Promise.all([
     resumenDeUso(empresa.id, plan),
@@ -99,7 +100,7 @@ export default async function PaginaPlan() {
         ))}
       </div>
 
-      {esAdmin ? (
+      {puedeAdministrar ? (
         <FormularioPago planActual={plan} />
       ) : (
         <Aviso tono="marca">Solo el propietario o un administrador maneja el plan.</Aviso>

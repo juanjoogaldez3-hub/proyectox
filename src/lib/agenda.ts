@@ -11,7 +11,11 @@ import {
   leerWebhook,
   type ConfigWhatsApp,
 } from "@/lib/whatsapp";
-import { citaVigente, cuandoYConQuien, enlacePublicoCita, primerNombre } from "@/lib/citas";
+import { citaVigente, cuandoYConQuien, enlacePublicoCita, primerNombre, urlBase } from "@/lib/citas";
+import { verificarLimite } from "@/lib/limites";
+import { planEfectivo } from "@/lib/planes";
+import { enviarCorreo } from "@/lib/correo";
+import { fechaDeCita } from "@/lib/gt";
 
 /**
  * Ciclo de vida de una cita fuera de las pantallas: recordatorios programados,
@@ -81,7 +85,8 @@ export async function programarRecordatorios(
     prisma.recordatorio.updateMany({
       where: {
         citaId,
-        tipo: { notIn: [...tipos, "CONFIRMACION"] },
+        // La confirmación ya salió y el aviso de control no depende de la fecha.
+        tipo: { notIn: [...tipos, "CONFIRMACION", "SEGUIMIENTO"] },
         estado: { in: ["PENDIENTE", "FALLIDO"] },
       },
       data: { estado: "CANCELADO" },
@@ -108,10 +113,72 @@ export async function programarRecordatorios(
   ]);
 }
 
-export async function cancelarRecordatorios(citaId: string): Promise<void> {
+/**
+ * Cancela lo que no salió. El aviso de control se conserva salvo que se pida
+ * (al cancelar la cita): marcar "no asistió" por error no debe borrarlo.
+ */
+export async function cancelarRecordatorios(citaId: string, incluirSeguimiento = false): Promise<void> {
   await prisma.recordatorio.updateMany({
-    where: { citaId, estado: { in: ["PENDIENTE", "FALLIDO"] } },
+    where: {
+      citaId,
+      estado: { in: ["PENDIENTE", "FALLIDO"] },
+      ...(incluirSeguimiento ? {} : { tipo: { not: "SEGUIMIENTO" } }),
+    },
     data: { estado: "CANCELADO" },
+  });
+}
+
+/**
+ * Deja programado el aviso de control ("le toca su control de presión") para
+ * esa fecha a las 9 de la mañana, y una tarea para la recepción el mismo día:
+ * si WhatsApp no está conectado, alguien igual llama al paciente.
+ */
+export async function programarSeguimiento(opciones: {
+  citaId: string;
+  fecha: Date;
+  nota: string;
+  usuarioId: string;
+}): Promise<void> {
+  const cita = await prisma.cita.findUnique({
+    where: { id: opciones.citaId },
+    select: { id: true, empresaId: true, contactoId: true, contacto: { select: { nombre: true, whatsapp: true } } },
+  });
+  if (!cita) return;
+  const whatsapp = await prisma.integracionWhatsApp.findUnique({
+    where: { empresaId: cita.empresaId },
+    select: { activa: true },
+  });
+
+  if (whatsapp?.activa && cita.contacto.whatsapp) {
+    await prisma.recordatorio.upsert({
+      where: { citaId_tipo: { citaId: cita.id, tipo: "SEGUIMIENTO" } },
+      create: {
+        empresaId: cita.empresaId,
+        citaId: cita.id,
+        tipo: "SEGUIMIENTO",
+        programadoPara: opciones.fecha,
+        nota: opciones.nota,
+      },
+      update: {
+        programadoPara: opciones.fecha,
+        nota: opciones.nota,
+        estado: "PENDIENTE",
+        intentos: 0,
+        error: null,
+        enviadoEl: null,
+        mensajeId: null,
+      },
+    });
+  }
+  await prisma.actividad.create({
+    data: {
+      empresaId: cita.empresaId,
+      usuarioId: opciones.usuarioId,
+      contactoId: cita.contactoId,
+      tipo: "LLAMADA",
+      titulo: `Agendar a ${cita.contacto.nombre}: ${opciones.nota}`.slice(0, 140),
+      venceEl: opciones.fecha,
+    },
   });
 }
 
@@ -206,7 +273,7 @@ export async function responderCita(
       motivoCancelacion: motivo ? `${origen}: ${motivo}` : origen,
     },
   });
-  await cancelarRecordatorios(cita.id);
+  await cancelarRecordatorios(cita.id, true);
   await anotarEnHistorial(
     cita.empresaId,
     cita.contactoId,
@@ -268,14 +335,30 @@ export async function procesarRecordatorios(
           include: {
             contacto: { select: { nombre: true, whatsapp: true } },
             profesional: { select: { nombre: true } },
-            empresa: { select: { nombre: true } },
+            empresa: {
+              select: {
+                nombre: true,
+                slug: true,
+                telefono: true,
+                reservasActivas: true,
+                plan: true,
+                estadoSuscripcion: true,
+                pruebaTermina: true,
+                planRenuevaEl: true,
+              },
+            },
           },
         },
       },
     });
     const { cita } = recordatorio;
+    const esSeguimiento = recordatorio.tipo === "SEGUIMIENTO";
 
-    if (!citaVigente(cita.estado) || cita.inicio.getTime() <= Date.now() || !cita.contacto.whatsapp) {
+    // El aviso de control es para citas ya atendidas; los demás, para citas que vienen.
+    const aplica = esSeguimiento
+      ? cita.estado === "COMPLETADA"
+      : citaVigente(cita.estado) && cita.inicio.getTime() > Date.now();
+    if (!aplica || !cita.contacto.whatsapp) {
       await prisma.recordatorio.update({
         where: { id },
         data: { estado: "CANCELADO", error: "La cita ya pasó, se canceló o el paciente no tiene WhatsApp." },
@@ -297,17 +380,35 @@ export async function procesarRecordatorios(
       continue;
     }
 
-    const plantilla =
-      recordatorio.tipo === "CONFIRMACION"
+    const plantilla = esSeguimiento
+      ? config.plantillaSeguimiento
+      : recordatorio.tipo === "CONFIRMACION"
         ? config.plantillaConfirmacion || config.plantillaRecordatorio
         : config.plantillaRecordatorio;
+    if (!plantilla) {
+      await prisma.recordatorio.update({
+        where: { id },
+        data: {
+          estado: "CANCELADO",
+          error: "Falta la plantilla de aviso de control; quedó la tarea para llamar al paciente.",
+        },
+      });
+      resumen.omitidos++;
+      continue;
+    }
 
     try {
+      // El tope de mensajes del plan; pasarlo es un fallo definitivo.
+      await verificarLimite(cita.empresaId, planEfectivo(cita.empresa), "whatsappPorMes").catch((e) => {
+        throw Object.assign(new Error(e instanceof Error ? e.message : String(e)), { definitivo: true });
+      });
       const mensajeId = await enviarPlantilla(config, {
         para: cita.contacto.whatsapp,
         plantilla,
         idioma: config.idiomaPlantilla,
-        parametros: parametrosPlantilla(cita),
+        parametros: esSeguimiento
+          ? parametrosSeguimiento(cita, recordatorio.nota)
+          : parametrosPlantilla(cita),
       });
       await prisma.recordatorio.update({
         where: { id },
@@ -316,7 +417,8 @@ export async function procesarRecordatorios(
       resumen.enviados++;
     } catch (e) {
       const mensaje = e instanceof Error ? e.message : "Error desconocido al enviar.";
-      const reintentar = recordatorio.intentos < MAX_INTENTOS;
+      const definitivo = Boolean((e as { definitivo?: boolean })?.definitivo);
+      const reintentar = !definitivo && recordatorio.intentos < MAX_INTENTOS;
       await prisma.recordatorio.update({
         where: { id },
         data: reintentar
@@ -328,6 +430,7 @@ export async function procesarRecordatorios(
             }
           : { estado: "FALLIDO", error: mensaje.slice(0, 500) },
       });
+      if (!reintentar) await avisarFallo(cita.empresaId, cita.contacto.nombre, cita.inicio, mensaje);
       resumen.fallidos++;
     }
   }
@@ -355,6 +458,54 @@ export function parametrosPlantilla(cita: {
   ];
 }
 
+/**
+ * Aviso de control: {{1}} nombre, {{2}} clínica, {{3}} qué le toca,
+ * {{4}} dónde agendar (reservas en línea si están activas; si no, el WhatsApp
+ * de la clínica).
+ */
+export function parametrosSeguimiento(
+  cita: {
+    motivo: string;
+    tokenPublico: string;
+    contacto: { nombre: string };
+    empresa: { nombre: string; slug: string; telefono: string | null; reservasActivas: boolean };
+  },
+  nota: string | null,
+): string[] {
+  const dondeAgendar = cita.empresa.reservasActivas
+    ? `${urlBase()}/reservar/${cita.empresa.slug}`
+    : cita.empresa.telefono
+      ? `https://wa.me/${cita.empresa.telefono}`
+      : enlacePublicoCita(cita.tokenPublico);
+  return [primerNombre(cita.contacto.nombre), cita.empresa.nombre, nota || `control de ${cita.motivo.toLowerCase()}`, dondeAgendar];
+}
+
+/**
+ * Cuando un recordatorio falla del todo, le llega un correo al propietario:
+ * es el paciente que quizá no se acuerde de venir.
+ */
+async function avisarFallo(empresaId: string, paciente: string, inicio: Date, motivo: string): Promise<void> {
+  try {
+    const propietario = await prisma.usuario.findFirst({
+      where: { empresaId, rol: "PROPIETARIO", activo: true },
+      select: { email: true },
+    });
+    if (!propietario) return;
+    await enviarCorreo({
+      para: propietario.email,
+      asunto: `No se pudo mandar el recordatorio de ${paciente}`,
+      texto: [
+        `El recordatorio por WhatsApp de ${paciente} (cita del ${fechaDeCita(inicio)}) no se pudo enviar.`,
+        `Motivo: ${motivo}`,
+        "",
+        "Conviene avisarle por teléfono. Revisá la conexión en Configuración → Google y WhatsApp.",
+      ].join("\n"),
+    });
+  } catch (e) {
+    console.error("No se pudo avisar el fallo del recordatorio:", e);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Webhook de WhatsApp
 // ---------------------------------------------------------------------------
@@ -376,6 +527,13 @@ export async function procesarWebhookWhatsApp(cuerpo: unknown): Promise<void> {
         where: { id: recordatorio.id },
         data: { estado: "FALLIDO", error: (e.error ?? "WhatsApp no pudo entregarlo.").slice(0, 500) },
       });
+      const datos = await prisma.recordatorio.findUnique({
+        where: { id: recordatorio.id },
+        select: { empresaId: true, cita: { select: { inicio: true, contacto: { select: { nombre: true } } } } },
+      });
+      if (datos) {
+        await avisarFallo(datos.empresaId, datos.cita.contacto.nombre, datos.cita.inicio, e.error ?? "WhatsApp no pudo entregarlo.");
+      }
       continue;
     }
     const nuevo = e.estado === "read" ? "LEIDO" : e.estado === "delivered" ? "ENTREGADO" : null;

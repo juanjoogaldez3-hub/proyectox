@@ -3,12 +3,13 @@ import { requerirSesion } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Aviso, Insignia, Tarjeta } from "@/components/ui";
 import { FormularioEtapa, BotonEliminarEtapa } from "./formulario";
+import { esAdmin } from "@/lib/roles";
 
 export const metadata: Metadata = { title: "Embudo" };
 
 export default async function PaginaEmbudoConfig() {
   const { empresa, usuario } = await requerirSesion();
-  const esAdmin = usuario.rol !== "VENDEDOR";
+  const puedeAdministrar = esAdmin(usuario.rol);
 
   const etapas = await prisma.etapaEmbudo.findMany({
     where: { empresaId: empresa.id },
@@ -46,13 +47,13 @@ export default async function PaginaEmbudoConfig() {
                   </p>
                 </div>
               </div>
-              {esAdmin && !e.esGanada && !e.esPerdida && <BotonEliminarEtapa id={e.id} />}
+              {puedeAdministrar && !e.esGanada && !e.esPerdida && <BotonEliminarEtapa id={e.id} />}
             </li>
           ))}
         </ul>
       </Tarjeta>
 
-      {esAdmin ? (
+      {puedeAdministrar ? (
         <FormularioEtapa />
       ) : (
         <Aviso tono="marca">Solo el propietario o un administrador cambia el embudo.</Aviso>
