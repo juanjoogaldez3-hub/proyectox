@@ -39,9 +39,12 @@ venderse por suscripción.
 - Servicios con duración y precio; el precio se propone al cobrar.
 - Estados: programada, confirmada, atendida, no asistió y cancelada. Cada cambio
   queda anotado en el historial del paciente.
-- **Google Calendar para la clínica y para el paciente.** La clínica conecta su
-  cuenta de Google una vez (OAuth) y elige el calendario; cada profesional
-  puede ir a un calendario propio. Las citas se crean, mueven y borran solas en
+- **Google Calendar para la clínica, el médico y el paciente.** La clínica
+  conecta su cuenta de Google una vez (OAuth) y elige el calendario. Cada
+  médico con usuario puede **conectar su propio Google Calendar** desde *Mi
+  cuenta*: sus citas pasan a su calendario (y vuelven al de la clínica si lo
+  desconecta), y la agenda no ofrece las horas en que tiene compromisos
+  personales. Las citas se crean, mueven y borran solas en
   Google. Si el paciente tiene correo, se le agrega como invitado y Google le
   manda la invitación: la cita aparece en **su** Google Calendar y se actualiza
   si se reprograma o cancela.
@@ -200,6 +203,9 @@ se calculan siempre en hora de Guatemala (UTC-6, sin horario de verano).
 3. Poné el ID y el secreto en `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
 4. Cada clínica entra a **Configuración → Google y WhatsApp → Conectar con
    Google** y elige en qué calendario caen las citas.
+5. Cada médico con usuario puede entrar a **Mi cuenta → Conectar mi Google
+   Calendar**. Mientras la app de Google esté "en prueba", su correo tiene que
+   estar en la lista de usuarios de prueba.
 
 El permiso que se pide es `calendar` (leer la lista de calendarios y escribir
 eventos). El refresh token se guarda cifrado con AES-256-GCM.

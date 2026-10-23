@@ -16,7 +16,10 @@ export async function datosFormularioCita(empresaId: string) {
       select: { id: true, nombre: true, especialidad: true, duracionMin: true },
       orderBy: { nombre: "asc" },
     }),
-    prisma.integracionGoogle.findUnique({ where: { empresaId }, select: { error: true } }),
+    prisma.integracionGoogle
+      .findUnique({ where: { empresaId }, select: { error: true } })
+      // Si la clínica no conectó Google pero algún médico sí, también hay invitaciones.
+      .then(async (g) => g ?? (await prisma.googleProfesional.findFirst({ where: { empresaId, error: null }, select: { error: true } }))),
     prisma.integracionWhatsApp.findUnique({ where: { empresaId }, select: { activa: true } }),
     prisma.tipoConsulta.findMany({
       where: { empresaId, activo: true },

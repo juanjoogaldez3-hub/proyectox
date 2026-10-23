@@ -128,6 +128,10 @@ export default async function PaginaIntegraciones({
               <span className="text-tinta-500"> · desde {fechaHora(google.conectadaEl)}</span>
             </p>
             {errorCalendarios && <Aviso tono="peligro">{errorCalendarios}</Aviso>}
+            <p className="text-xs text-tinta-500">
+              Los médicos con usuario pueden conectar su propio Google Calendar desde Mi cuenta: sus
+              citas van a su calendario y la agenda respeta sus compromisos personales.
+            </p>
             {puedeAdministrar && calendarios.length > 0 && (
               <ElegirCalendario calendarios={calendarios} actual={google.calendarioId} />
             )}

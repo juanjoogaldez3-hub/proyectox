@@ -19,7 +19,11 @@ export default async function PaginaProfesionales() {
     prisma.profesional.findMany({
       where: { empresaId: empresa.id },
       orderBy: [{ activo: "desc" }, { nombre: "asc" }],
-      include: { _count: { select: { horarios: true } } },
+      include: {
+        _count: { select: { horarios: true } },
+        google: { select: { email: true, error: true } },
+        usuario: { select: { id: true } },
+      },
     }),
     prisma.integracionGoogle.findUnique({ where: { empresaId: empresa.id }, select: { error: true } }),
     prisma.bloqueoAgenda.findMany({
@@ -58,6 +62,8 @@ export default async function PaginaProfesionales() {
                 esAdmin={puedeAdministrar}
                 calendarios={calendarios}
                 tieneHorario={p._count.horarios > 0}
+                googlePropio={p.google ? (p.google.error ? `${p.google.email} (requiere reconectar)` : p.google.email) : null}
+                tieneUsuario={Boolean(p.usuario)}
                 accion={actualizarProfesional.bind(null, p.id)}
                 valores={{
                   nombre: p.nombre,

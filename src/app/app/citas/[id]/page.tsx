@@ -81,17 +81,25 @@ export default async function PaginaCita({ params }: { params: Promise<{ id: str
   });
   if (!cita) notFound();
 
-  const [google, whatsapp] = await Promise.all([
+  const [googleClinica, googleMedico, whatsapp] = await Promise.all([
     prisma.integracionGoogle.findUnique({
       where: { empresaId: empresa.id },
       select: { email: true, error: true },
     }),
+    cita.profesionalId
+      ? prisma.googleProfesional.findUnique({
+          where: { profesionalId: cita.profesionalId },
+          select: { email: true, error: true },
+        })
+      : Promise.resolve(null),
     prisma.integracionWhatsApp.findUnique({
       where: { empresaId: empresa.id },
       select: { activa: true },
     }),
   ]);
 
+  // La cuenta donde vive el evento: la del médico si lo conectó, si no la de la clínica.
+  const google = cita.googleCuenta && cita.googleCuenta !== "empresa" ? googleMedico : (googleClinica ?? googleMedico);
   const estado = ESTADOS_CITA[cita.estado];
   const vigente = citaVigente(cita.estado);
   const duracion = Math.round((cita.fin.getTime() - cita.inicio.getTime()) / 60_000);
@@ -347,6 +355,7 @@ export default async function PaginaCita({ params }: { params: Promise<{ id: str
             ) : cita.googleEventoId ? (
               <p className="text-sm text-tinta-600">
                 En el calendario de {google.email}
+                {cita.googleCuenta && cita.googleCuenta !== "empresa" && " (el del médico)"}
                 {cita.googleSincronizadaEl && ` · actualizado ${fechaHora(cita.googleSincronizadaEl)}`}.
                 {cita.invitarPaciente && cita.contacto.email && (
                   <span className="mt-1 block text-xs text-tinta-500">

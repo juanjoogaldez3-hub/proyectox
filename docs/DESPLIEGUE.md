@@ -63,6 +63,9 @@ WhatsApp. Entrá a `/registro` y creá la cuenta de la clínica.
    `https://TU-DOMINIO/api/google/callback`
 4. Copiá el ID y el secreto a Vercel y redeploy.
 5. En la app: Configuración → Google y WhatsApp → **Conectar con Google**.
+6. Los médicos con usuario conectan su propio calendario en **Mi cuenta →
+   Conectar mi Google Calendar**. Agregá también sus correos como usuarios de
+   prueba mientras la app no esté verificada.
 
 ## 4. WhatsApp Business (1 h + aprobación de Meta)
 
