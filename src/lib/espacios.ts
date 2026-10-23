@@ -45,7 +45,7 @@ async function ocupadoDelDia(
       },
       select: { inicio: true, fin: true, motivo: true },
     }),
-    ocupadoEnGoogle(empresaId, profesional.calendarioId, desde, hasta),
+    ocupadoEnGoogle(empresaId, profesional, desde, hasta),
   ]);
 
   return [

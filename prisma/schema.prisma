@@ -70,26 +70,27 @@ model Empresa {
   creadoEl                  DateTime          @default(now())
   actualizadoEl             DateTime          @updatedAt
 
-  usuarios          Usuario[]
-  contactos         Contacto[]
-  etapas            EtapaEmbudo[]
-  oportunidades     Oportunidad[]
-  actividades       Actividad[]
-  notas             Nota[]
-  productos         Producto[]
-  movimientos       MovimientoInventario[]
-  cotizaciones      Cotizacion[]
-  ventas            Venta[]
-  pagos             PagoSuscripcion[]
-  profesionales     Profesional[]
-  citas             Cita[]
-  recordatorios     Recordatorio[]
-  google            IntegracionGoogle?
-  whatsapp          IntegracionWhatsApp?
-  bloqueos          BloqueoAgenda[]
-  tiposConsulta     TipoConsulta[]
-  notasClinicas     NotaClinica[]
-  accesosExpediente AccesoExpediente[]
+  usuarios            Usuario[]
+  contactos           Contacto[]
+  etapas              EtapaEmbudo[]
+  oportunidades       Oportunidad[]
+  actividades         Actividad[]
+  notas               Nota[]
+  productos           Producto[]
+  movimientos         MovimientoInventario[]
+  cotizaciones        Cotizacion[]
+  ventas              Venta[]
+  pagos               PagoSuscripcion[]
+  profesionales       Profesional[]
+  citas               Cita[]
+  recordatorios       Recordatorio[]
+  google              IntegracionGoogle?
+  googleProfesionales GoogleProfesional[]
+  whatsapp            IntegracionWhatsApp?
+  bloqueos            BloqueoAgenda[]
+  tiposConsulta       TipoConsulta[]
+  notasClinicas       NotaClinica[]
+  accesosExpediente   AccesoExpediente[]
 }
 
 model Usuario {
@@ -525,6 +526,7 @@ model Profesional {
   horarios      HorarioProfesional[]
   bloqueos      BloqueoAgenda[]
   usuario       Usuario?
+  google        GoogleProfesional?
   notasClinicas NotaClinica[]
 
   @@index([empresaId])
@@ -635,6 +637,10 @@ model Cita {
   googleCalendarioId   String?
   googleSincronizadaEl DateTime?
   googleError          String?
+  // De quién es la cuenta donde vive el evento: "empresa" o el id del
+  // profesional que conectó su propio Google. Hace falta para borrarlo o
+  // moverlo con el token correcto.
+  googleCuenta         String?
 
   creadaPorId   String?
   creadaPor     Usuario? @relation(fields: [creadaPorId], references: [id], onDelete: SetNull)
@@ -788,4 +794,27 @@ model AccesoExpediente {
   creadoEl   DateTime @default(now())
 
   @@index([empresaId, contactoId, creadoEl])
+}
+
+/**
+ * Google Calendar propio de un médico. Si existe, sus citas van a su
+ * calendario (no al de la clínica) y la agenda respeta sus compromisos
+ * personales. Lo conecta el médico desde "Mi cuenta".
+ */
+model GoogleProfesional {
+  id                  String      @id @default(cuid())
+  empresaId           String
+  empresa             Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  profesionalId       String      @unique
+  profesional         Profesional @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
+  email               String
+  refreshTokenCifrado String
+  accessTokenCifrado  String?
+  accessTokenExpira   DateTime?
+  calendarioId        String      @default("primary")
+  calendarioNombre    String?
+  conectadaEl         DateTime    @default(now())
+  error               String?
+
+  @@index([empresaId])
 }

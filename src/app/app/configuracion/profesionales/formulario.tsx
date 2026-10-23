@@ -98,7 +98,7 @@ export function FormularioProfesional({
           <Campo
             etiqueta="Calendario de Google"
             className="sm:col-span-2"
-            ayuda="Útil si cada doctor lleva su propio calendario. Por defecto usa el de la clínica."
+            ayuda="Un calendario de la cuenta de la clínica. Si el médico tiene usuario, es mejor que conecte su propio Google desde Mi cuenta."
           >
             <select name="calendarioId" defaultValue={valores?.calendarioId ?? ""} className="campo">
               <option value="">El calendario de la clínica</option>
@@ -127,10 +127,15 @@ export function FilaProfesional({
   calendarios,
   esAdmin,
   tieneHorario,
+  googlePropio,
+  tieneUsuario,
 }: {
   id: string;
   activo: boolean;
   tieneHorario: boolean;
+  // Correo del Google que conectó el propio médico, si lo hizo.
+  googlePropio: string | null;
+  tieneUsuario: boolean;
   valores: ValoresProfesional;
   accion: (estado: EstadoAccion, datos: FormData) => Promise<EstadoAccion>;
   calendarios: { id: string; nombre: string }[] | null;
@@ -153,7 +158,13 @@ export function FilaProfesional({
                 valores.especialidad,
                 `${valores.duracionMin} min`,
                 tieneHorario ? "con horario" : "sin horario",
-                calendario && `Google: ${calendario.nombre}`,
+                googlePropio
+                  ? `su Google: ${googlePropio}`
+                  : calendario
+                    ? `Google: ${calendario.nombre}`
+                    : tieneUsuario
+                      ? "puede conectar su Google desde Mi cuenta"
+                      : null,
               ]
                 .filter(Boolean)
                 .join(" · ")}
@@ -184,7 +195,8 @@ export function FilaProfesional({
           <FormularioProfesional
             accion={accion}
             valores={valores}
-            calendarios={calendarios}
+            // Si el médico conectó su Google, sus citas van ahí: no se elige calendario.
+            calendarios={googlePropio ? null : calendarios}
             alGuardar={() => setEditando(false)}
           />
         </Tarjeta>

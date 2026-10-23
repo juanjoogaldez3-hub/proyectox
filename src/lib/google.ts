@@ -97,8 +97,49 @@ async function pedirToken(cuerpo: Record<string, string>): Promise<RespuestaToke
   return datos;
 }
 
-/** Paso final del OAuth: guarda la cuenta conectada para la empresa. */
-export async function conectarCuentaGoogle(empresaId: string, codigo: string): Promise<string> {
+/**
+ * A quién pertenece una conexión de Google: la cuenta general de la clínica o
+ * la de un médico que conectó su propio calendario.
+ */
+export type CuentaGoogle = { tipo: "empresa"; empresaId: string } | { tipo: "profesional"; profesionalId: string };
+
+/** Clave con la que se anota en la cita en qué cuenta vive su evento. */
+function claveDe(cuenta: CuentaGoogle): string {
+  return cuenta.tipo === "empresa" ? "empresa" : cuenta.profesionalId;
+}
+
+type RegistroGoogle = {
+  refreshTokenCifrado: string;
+  accessTokenCifrado: string | null;
+  accessTokenExpira: Date | null;
+  calendarioId: string;
+};
+
+async function leerRegistro(cuenta: CuentaGoogle): Promise<RegistroGoogle | null> {
+  return cuenta.tipo === "empresa"
+    ? prisma.integracionGoogle.findUnique({ where: { empresaId: cuenta.empresaId } })
+    : prisma.googleProfesional.findUnique({ where: { profesionalId: cuenta.profesionalId } });
+}
+
+async function actualizarRegistro(
+  cuenta: CuentaGoogle,
+  data: { accessTokenCifrado?: string; accessTokenExpira?: Date; error?: string | null },
+): Promise<void> {
+  if (cuenta.tipo === "empresa") {
+    await prisma.integracionGoogle.update({ where: { empresaId: cuenta.empresaId }, data });
+  } else {
+    await prisma.googleProfesional.update({ where: { profesionalId: cuenta.profesionalId }, data });
+  }
+}
+
+/**
+ * Paso final del OAuth: guarda la cuenta conectada. Para un médico, además,
+ * hace falta saber de qué empresa es (para filtrar y borrar en cascada).
+ */
+export async function conectarCuentaGoogle(
+  destino: { empresaId: string; profesionalId?: string },
+  codigo: string,
+): Promise<string> {
   const token = await pedirToken({
     code: codigo,
     redirect_uri: urlRetornoGoogle(),
@@ -127,56 +168,91 @@ export async function conectarCuentaGoogle(empresaId: string, codigo: string): P
     conectadaEl: new Date(),
     error: null,
   };
-  await prisma.integracionGoogle.upsert({
-    where: { empresaId },
-    create: { empresaId, ...datos },
-    // Si reconecta otra cuenta, el calendario elegido antes ya no aplica.
-    update: { ...datos, calendarioId: "primary", calendarioNombre: null },
-  });
+  // Si reconecta otra cuenta, el calendario elegido antes ya no aplica.
+  const reinicio = { calendarioId: "primary", calendarioNombre: null };
+  if (destino.profesionalId) {
+    await prisma.googleProfesional.upsert({
+      where: { profesionalId: destino.profesionalId },
+      create: { empresaId: destino.empresaId, profesionalId: destino.profesionalId, ...datos },
+      update: { ...datos, ...reinicio },
+    });
+  } else {
+    await prisma.integracionGoogle.upsert({
+      where: { empresaId: destino.empresaId },
+      create: { empresaId: destino.empresaId, ...datos },
+      update: { ...datos, ...reinicio },
+    });
+  }
   return email;
 }
 
-export async function desconectarCuentaGoogle(empresaId: string): Promise<void> {
-  const integracion = await prisma.integracionGoogle.findUnique({ where: { empresaId } });
-  if (!integracion) return;
+async function revocar(refreshTokenCifrado: string): Promise<void> {
   try {
-    await fetch(`${URL_REVOCAR}?token=${encodeURIComponent(descifrar(integracion.refreshTokenCifrado))}`, {
+    await fetch(`${URL_REVOCAR}?token=${encodeURIComponent(descifrar(refreshTokenCifrado))}`, {
       method: "POST",
       cache: "no-store",
     });
   } catch {
     // Si Google no responde igual borramos la conexión de nuestro lado.
   }
+}
+
+export async function desconectarCuentaGoogle(empresaId: string): Promise<void> {
+  const integracion = await prisma.integracionGoogle.findUnique({ where: { empresaId } });
+  if (!integracion) return;
+  await revocar(integracion.refreshTokenCifrado);
   await prisma.integracionGoogle.delete({ where: { empresaId } });
 }
 
-/** Devuelve un access token vigente, renovándolo con el refresh token si hace falta. */
-async function tokenDeAcceso(empresaId: string): Promise<{ token: string; calendarioId: string } | null> {
-  const integracion = await prisma.integracionGoogle.findUnique({ where: { empresaId } });
-  if (!integracion) return null;
+/**
+ * El médico desconecta su Google. Antes de soltar el acceso se borran de su
+ * calendario las citas que vienen, y después se pasan al de la clínica: así
+ * no le quedan citas duplicadas ni huérfanas.
+ */
+export async function desconectarGoogleProfesional(profesionalId: string): Promise<void> {
+  const conexion = await prisma.googleProfesional.findUnique({ where: { profesionalId } });
+  if (!conexion) return;
+  const citas = await prisma.cita.findMany({
+    where: { profesionalId, googleCuenta: profesionalId, inicio: { gt: new Date() } },
+    select: { id: true, googleEventoId: true, googleCalendarioId: true },
+  });
+  const acceso = await accesoDe({ tipo: "profesional", profesionalId }).catch(() => null);
+  for (const c of citas) {
+    if (acceso && c.googleEventoId && c.googleCalendarioId) {
+      await llamarCalendario(acceso.token, `${rutaEvento(c.googleCalendarioId, c.googleEventoId)}?sendUpdates=none`, {
+        method: "DELETE",
+      }).catch(() => undefined);
+    }
+    await prisma.cita.update({
+      where: { id: c.id },
+      data: { googleEventoId: null, googleCalendarioId: null, googleCuenta: null },
+    });
+  }
+  await revocar(conexion.refreshTokenCifrado);
+  await prisma.googleProfesional.delete({ where: { profesionalId } });
+  for (const c of citas) await sincronizarCitaConGoogle(c.id);
+}
 
-  if (
-    integracion.accessTokenCifrado &&
-    integracion.accessTokenExpira &&
-    integracion.accessTokenExpira.getTime() > Date.now()
-  ) {
-    return { token: descifrar(integracion.accessTokenCifrado), calendarioId: integracion.calendarioId };
+/** Devuelve un access token vigente, renovándolo con el refresh token si hace falta. */
+async function accesoDe(cuenta: CuentaGoogle): Promise<{ token: string; calendarioId: string } | null> {
+  const registro = await leerRegistro(cuenta);
+  if (!registro) return null;
+
+  if (registro.accessTokenCifrado && registro.accessTokenExpira && registro.accessTokenExpira.getTime() > Date.now()) {
+    return { token: descifrar(registro.accessTokenCifrado), calendarioId: registro.calendarioId };
   }
 
   try {
     const nuevo = await pedirToken({
-      refresh_token: descifrar(integracion.refreshTokenCifrado),
+      refresh_token: descifrar(registro.refreshTokenCifrado),
       grant_type: "refresh_token",
     });
-    await prisma.integracionGoogle.update({
-      where: { empresaId },
-      data: {
-        accessTokenCifrado: cifrar(nuevo.access_token),
-        accessTokenExpira: new Date(Date.now() + (nuevo.expires_in - 60) * 1000),
-        error: null,
-      },
+    await actualizarRegistro(cuenta, {
+      accessTokenCifrado: cifrar(nuevo.access_token),
+      accessTokenExpira: new Date(Date.now() + (nuevo.expires_in - 60) * 1000),
+      error: null,
     });
-    return { token: nuevo.access_token, calendarioId: integracion.calendarioId };
+    return { token: nuevo.access_token, calendarioId: registro.calendarioId };
   } catch (e) {
     // invalid_grant = el usuario quitó el permiso o cambió la contraseña.
     const mensaje =
@@ -185,9 +261,42 @@ async function tokenDeAcceso(empresaId: string): Promise<{ token: string; calend
         : e instanceof Error
           ? e.message
           : "No se pudo renovar el acceso a Google.";
-    await prisma.integracionGoogle.update({ where: { empresaId }, data: { error: mensaje } });
+    await actualizarRegistro(cuenta, { error: mensaje });
     throw new GoogleError(mensaje);
   }
+}
+
+function tokenDeAcceso(empresaId: string) {
+  return accesoDe({ tipo: "empresa", empresaId });
+}
+
+/**
+ * Dónde van las citas de un profesional: a su propio Google si lo conectó y
+ * funciona; si no, a la cuenta de la clínica, en el calendario que se le haya
+ * asignado o en el general.
+ */
+async function destinoDelProfesional(
+  empresaId: string,
+  profesional: { id: string; calendarioId: string | null } | null,
+): Promise<{ cuenta: CuentaGoogle; token: string; calendarioId: string } | null> {
+  if (profesional) {
+    const propia = await prisma.googleProfesional.findUnique({
+      where: { profesionalId: profesional.id },
+      select: { error: true },
+    });
+    if (propia && !propia.error) {
+      const cuenta: CuentaGoogle = { tipo: "profesional", profesionalId: profesional.id };
+      const acceso = await accesoDe(cuenta).catch(() => null);
+      if (acceso) return { cuenta, token: acceso.token, calendarioId: acceso.calendarioId };
+    }
+  }
+  const acceso = await tokenDeAcceso(empresaId);
+  if (!acceso) return null;
+  return {
+    cuenta: { tipo: "empresa", empresaId },
+    token: acceso.token,
+    calendarioId: profesional?.calendarioId || acceso.calendarioId,
+  };
 }
 
 async function llamarCalendario<T>(
@@ -221,8 +330,11 @@ async function llamarCalendario<T>(
 export type CalendarioGoogle = { id: string; nombre: string; principal: boolean };
 
 /** Calendarios donde la cuenta conectada puede escribir. */
-export async function listarCalendarios(empresaId: string): Promise<CalendarioGoogle[]> {
-  const acceso = await tokenDeAcceso(empresaId);
+export async function listarCalendarios(
+  empresaId: string,
+  cuenta: CuentaGoogle = { tipo: "empresa", empresaId },
+): Promise<CalendarioGoogle[]> {
+  const acceso = await accesoDe(cuenta);
   if (!acceso) return [];
   const datos = await llamarCalendario<{
     items?: { id: string; summary: string; summaryOverride?: string; primary?: boolean }[];
@@ -242,14 +354,15 @@ export async function listarCalendarios(empresaId: string): Promise<CalendarioGo
  */
 export async function ocupadoEnGoogle(
   empresaId: string,
-  calendarioProfesional: string | null,
+  profesional: { id: string; calendarioId: string | null },
   desde: Date,
   hasta: Date,
 ): Promise<{ inicio: Date; fin: Date; titulo: string }[]> {
   try {
-    const acceso = await tokenDeAcceso(empresaId);
-    if (!acceso) return [];
-    const calendarioId = calendarioProfesional || acceso.calendarioId;
+    const destino = await destinoDelProfesional(empresaId, profesional);
+    if (!destino) return [];
+    const acceso = destino;
+    const calendarioId = destino.calendarioId;
     const params = new URLSearchParams({
       timeMin: desde.toISOString(),
       timeMax: hasta.toISOString(),
@@ -307,36 +420,58 @@ export async function sincronizarCitaConGoogle(citaId: string): Promise<void> {
     where: { id: citaId },
     include: {
       contacto: { select: { nombre: true, email: true, whatsapp: true, telefono: true } },
-      profesional: { select: { nombre: true, especialidad: true, calendarioId: true } },
+      profesional: { select: { id: true, nombre: true, especialidad: true, calendarioId: true } },
       empresa: { select: { nombre: true, direccion: true, municipio: true, departamento: true } },
     },
   });
   if (!cita) return;
 
   try {
-    const acceso = await tokenDeAcceso(cita.empresaId);
-    if (!acceso) return; // La empresa no usa Google: nada que hacer.
+    const destino = await destinoDelProfesional(cita.empresaId, cita.profesional);
+    // Sin Google en ningún lado y sin evento previo: nada que hacer.
+    if (!destino && !cita.googleEventoId) return;
 
-    const calendarioId = cita.profesional?.calendarioId || acceso.calendarioId;
+    const calendarioId = destino?.calendarioId ?? null;
+    const clave = destino ? claveDe(destino.cuenta) : null;
+    const claveAnterior = cita.googleCuenta ?? "empresa";
     const invitado = cita.invitarPaciente && cita.contacto.email ? cita.contacto.email : null;
     const avisar = invitado ? "all" : "none";
 
-    // Si la cita se canceló, o cambió de calendario, se borra el evento viejo.
-    const debeBorrar =
+    // Si la cita se canceló, o cambió de cuenta o de calendario (por ejemplo
+    // porque el médico conectó su Google), se borra el evento viejo con el
+    // token de la cuenta donde estaba.
+    const debeBorrar = Boolean(
       cita.googleEventoId &&
-      (cita.estado === "CANCELADA" || cita.googleCalendarioId !== calendarioId);
+        (cita.estado === "CANCELADA" || claveAnterior !== clave || cita.googleCalendarioId !== calendarioId),
+    );
     if (debeBorrar && cita.googleEventoId && cita.googleCalendarioId) {
-      try {
-        await llamarCalendario(
-          acceso.token,
-          `${rutaEvento(cita.googleCalendarioId, cita.googleEventoId)}?sendUpdates=${avisar}`,
-          { method: "DELETE" },
-        );
-      } catch (e) {
-        // 404/410: ya lo habían borrado a mano en Google.
-        if (!(e instanceof GoogleError && (e.estado === 404 || e.estado === 410))) throw e;
+      const cuentaAnterior: CuentaGoogle =
+        claveAnterior === "empresa"
+          ? { tipo: "empresa", empresaId: cita.empresaId }
+          : { tipo: "profesional", profesionalId: claveAnterior };
+      const anterior = claveAnterior === clave && destino ? destino : await accesoDe(cuentaAnterior).catch(() => null);
+      if (anterior) {
+        try {
+          await llamarCalendario(
+            anterior.token,
+            `${rutaEvento(cita.googleCalendarioId, cita.googleEventoId)}?sendUpdates=${avisar}`,
+            { method: "DELETE" },
+          );
+        } catch (e) {
+          // 404/410: ya lo habían borrado a mano en Google.
+          if (!(e instanceof GoogleError && (e.estado === 404 || e.estado === 410))) throw e;
+        }
       }
     }
+
+    if (!destino || !calendarioId) {
+      await prisma.cita.update({
+        where: { id: cita.id },
+        data: { googleEventoId: null, googleCalendarioId: null, googleCuenta: null },
+      });
+      return;
+    }
+    const acceso = destino;
 
     if (cita.estado === "CANCELADA") {
       await prisma.cita.update({
@@ -344,6 +479,7 @@ export async function sincronizarCitaConGoogle(citaId: string): Promise<void> {
         data: {
           googleEventoId: null,
           googleCalendarioId: null,
+          googleCuenta: null,
           googleSincronizadaEl: new Date(),
           googleError: null,
         },
@@ -412,6 +548,7 @@ export async function sincronizarCitaConGoogle(citaId: string): Promise<void> {
       data: {
         googleEventoId: guardado?.id ?? null,
         googleCalendarioId: calendarioId,
+        googleCuenta: clave,
         googleSincronizadaEl: new Date(),
         googleError: null,
       },
